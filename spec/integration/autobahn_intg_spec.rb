@@ -80,14 +80,33 @@ describe Autobahn do
       @consumer = @transport_system.consumer
     end
 
+    after do
+      @consumer.disconnect!
+    end
+
     context 'when subscribed' do
       it 'delivers all available messages to the subscriber' do
-        @latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+        latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
         @consumer.subscribe(:blocking => false) do |headers, message|
           headers.ack
-          @latch.count_down
+          latch.count_down
         end
-        @latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+      end
+
+      it 'subscribes to queues over connections to the node hosting the queue' do
+        @consumer.subscribe(:blocking => false) { |headers, message| }
+        queue_names.each do |queue_name|
+          queue_info = @transport_system.cluster.queue("%2F/#{queue_name}")
+          queue_node = queue_info['node']
+          consumers = queue_info['consumer_details'].reduce([]) do |acc, consumer_details|
+            channel_name = consumer_details['channel_details']['name']
+            channel_info = @transport_system.cluster.channel(channel_name)
+            acc << channel_info['node']
+            acc
+          end
+          consumers.uniq.should == [queue_node]
+        end
       end
     end
   end

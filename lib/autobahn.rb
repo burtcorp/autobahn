@@ -17,13 +17,15 @@ module Autobahn
   end
 
   class TransportSystem
+    attr_reader :cluster
+
     def initialize(exchange_name, options={})
       @cluster = Cluster.new(options)
       @exchange_name = exchange_name
       @connection_configurator = options[:connection_configurator] || method(:default_connection_configurator)
       @consumers = []
       @publishers = []
-    end 
+    end
 
     def consumer
       setup!
@@ -35,7 +37,7 @@ module Autobahn
     def disconnect!
       @consumers.each(&:disconnect!)
       @publishers.each(&:disconnect!)
-      @connections.values.each(&:close)
+      @connections.values.each(&:close) if @connections
     end
 
   private
@@ -95,9 +97,15 @@ module Autobahn
     end
 
     def disconnect!
+      return unless @running
       @running = false
       if @subscriptions
         @subscriptions.each(&:cancel)
+        @subscriptions = nil
+      end
+      if @queues
+        @queues.map(&:channel).each(&:close)
+        @queues = nil
       end
       if @subscriber_pool
         @subscriber_pool.shutdown
@@ -153,35 +161,50 @@ module Autobahn
     end
   end
 
+  module RestClient
+    module InstanceMethods
+      def configure_rest_client(base_url, user, password)
+        @base_url = base_url
+        @http_client = HTTPClient.new
+        @http_client.set_auth(@base_url, user, password)
+      end
+
+      def api_call(entity, id=nil)
+        url = "#@base_url/#{entity}"
+        url << "/#{id}" if id
+        JSON.parse(@http_client.get_content(url))
+      end
+    end
+
+    module ClassMethods
+      def entity(name)
+        plural = "#{name}s".to_sym
+        define_method(plural) { api_call(plural) }
+        define_method(name) { |id| api_call(plural, id) }
+      end
+    end
+
+    def self.included(m)
+      m.send(:include, InstanceMethods)
+      m.send(:extend, ClassMethods)
+    end
+  end
+
   class Cluster
+    include RestClient
+
+    entity :nodes
+    entity :channel
+    entity :exchange
+    entity :queue
+    entity :binding
+
     def initialize(options={})
       api_host = options[:api_host] || 'localhost'
       api_port = options[:api_port] || 55672
       user = options[:user] || 'guest'
       password = options[:password] || 'guest'
-      @api_base = "http://#{api_host}:#{api_port}/api"
-      @http_client = HTTPClient.new
-      @http_client.set_auth(@api_base, user, password)
-    end
-
-    def api_call(entity)
-      JSON.parse(@http_client.get_content("#@api_base/#{entity}"))
-    end
-
-    def nodes
-      @nodes ||= api_call('nodes')
-    end
-
-    def exchanges
-      @exchanges ||= api_call('exchanges')
-    end
-
-    def queues
-      @queues ||= api_call('queues')
-    end
-
-    def bindings
-      @bindings ||= api_call('bindings')
+      configure_rest_client("http://#{api_host}:#{api_port}/api", user, password)
     end
   end
 end
