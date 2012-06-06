@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Usage: clusterctl start|stop
+#
+# Launches a local RabbitMQ cluster
+#
+# The name returned by `hostname -s` must resolve to 127.0.0.1
+
+CLUSTER_SIZE=4
+NODENAME_PREFIX='rmq'
+START_PORT=6672
+
+function start_rmq_node {
+	nodename=$1
+	port=$2
+	mgmt_port=$(($port + 50000))
+	RABBITMQ_NODE_PORT=$port \
+		RABBITMQ_NODENAME=$nodename \
+		RABBITMQ_SERVER_START_ARGS="-rabbitmq_mochiweb listeners [{mgmt,[{port,$mgmt_port}]}]" \
+		rabbitmq-server -detached
+}
+
+function join_cluster {
+	nodename=$1
+	host=$(hostname -s)
+	master_node="${NODENAME_PREFIX}0"
+	rabbitmqctl -n $nodename stop_app
+	rabbitmqctl -n $nodename reset
+	rabbitmqctl -n $nodename cluster $master_node@$host
+	rabbitmqctl -n $nodename start_app
+}
+
+function start_cluster {
+	start_rmq_node "${NODENAME_PREFIX}0" $START_PORT
+
+	for ((n=1; n < $CLUSTER_SIZE; n++)); do
+		port=$(($START_PORT + $n))
+		nodename="$NODENAME_PREFIX$n"
+		start_rmq_node $nodename $port
+		join_cluster $nodename
+	done
+}
+
+function stop_cluster {
+	for ((n=0; n < $CLUSTER_SIZE; n++)); do
+		rabbitmqctl -n "$NODENAME_PREFIX$n" stop
+	done
+}
+
+case "$1" in
+	"start" )
+		start_cluster ;;
+    "stop" )
+        stop_cluster ;;
+	* )
+		echo "Usage: clusterctl start|stop" ;;
+esac
+
+
