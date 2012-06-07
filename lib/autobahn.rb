@@ -19,10 +19,10 @@ module Autobahn
   class TransportSystem
     attr_reader :cluster
 
-    def initialize(exchange_name, options={})
-      @cluster = Cluster.new(options)
+    def initialize(api_uri, exchange_name, options={})
+      @cluster = Cluster.new(api_uri, options)
       @exchange_name = exchange_name
-      @connection_configurator = options[:connection_configurator] || method(:default_connection_configurator)
+      @host_resolver = options[:host_resolver] || method(:default_host_resolver)
       @consumers = []
       @publishers = []
     end
@@ -69,14 +69,32 @@ module Autobahn
     def connect!
       return if defined? @connections
       nodes = @routing.values.map { |q| q[:node] }.uniq
-      @connections = nodes.reduce({}) do |acc, host|
-        acc[host] = HotBunnies.connect(@connection_configurator.call(host))
+      @connections = nodes.reduce({}) do |acc, node|
+        acc[node] = HotBunnies.connect(connection_configuration(node))
         acc
       end
     end
 
-    def default_connection_configurator(host)
-      {:host => host}
+    def default_host_resolver(node)
+      node.split('@').last
+    end
+
+    def connection_configuration(node)
+      host = @host_resolver.call(node)
+      {:host => host, :port => node_ports[node]}
+    end
+
+    def node_ports
+      @node_ports ||= begin
+        pairs = @cluster.overview['listeners'].map do |l|
+          if l['protocol'] == 'amqp'
+            [l['node'], l['port']]
+          else
+            nil
+          end
+        end
+        Hash[pairs.compact]
+      end
     end
   end
 
@@ -222,10 +240,14 @@ module Autobahn
     end
 
     module ClassMethods
-      def entity(name)
-        plural = "#{name}s".to_sym
-        define_method(plural) { api_call(plural) }
-        define_method(name) { |id| api_call(plural, id) }
+      def entity(name, options={})
+        if options[:singleton]
+          define_method(name) { api_call(name) }
+        else
+          plural = "#{name}s".to_sym
+          define_method(plural) { api_call(plural) }
+          define_method(name) { |id| api_call(plural, id) }
+        end
       end
     end
 
@@ -243,13 +265,12 @@ module Autobahn
     entity :exchange
     entity :queue
     entity :binding
+    entity :overview, :singleton => true
 
-    def initialize(options={})
-      api_host = options[:api_host] || 'localhost'
-      api_port = options[:api_port] || 55672
+    def initialize(api_uri, options={})
       user = options[:user] || 'guest'
       password = options[:password] || 'guest'
-      configure_rest_client("http://#{api_host}:#{api_port}/api", user, password)
+      configure_rest_client(api_uri, user, password)
     end
   end
 end

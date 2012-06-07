@@ -8,18 +8,12 @@ describe Autobahn do
   let(:num_queues_per_node) { 3 }
   let(:num_queues) { num_nodes * num_queues_per_node }
   let(:base_port) { 6672 }
-  let(:mgmt_base_port) { 56672 }
+  let(:api_base_port) { 56672 }
   let(:exchange_name) { 'test_exchange' }
   let(:queue_prefix) { 'test_queue_' }
   let(:routing_key_prefix) { 'test_rk_' }
   let(:queue_names) { num_queues.times.map { |i| "#{queue_prefix}#{i.to_s.rjust(2, '0')}" } }
   let(:routing_keys) { num_queues.times.map { |i| "#{routing_key_prefix}#{i.to_s.rjust(2, '0')}" } }
-  let(:connection_configurator) do
-    lambda do |host|
-      index, hostname = host.scan(/^rmq(\d)@(.+)$/).flatten
-      {:host => hostname, :port => base_port + index.to_i}
-    end
-  end
 
   before :all do
     begin
@@ -41,11 +35,7 @@ describe Autobahn do
   end
 
   before :all do
-    options = {
-      :api_port => mgmt_base_port,
-      :connection_configurator => connection_configurator
-    }
-    @transport_system = Autobahn::TransportSystem.new(exchange_name, options)
+    @transport_system = Autobahn::TransportSystem.new("http://localhost:#{api_base_port}/api", exchange_name)
   end
 
   after :all do
