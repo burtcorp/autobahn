@@ -133,4 +133,33 @@ describe Autobahn do
       end
     end
   end
+
+  describe 'Transporting data through a transport system' do
+    before do
+      @publisher = @transport_system.publisher
+      @consumer = @transport_system.consumer
+    end
+
+    before do
+      @messages = 200.times.map { |i| "foo#{i}" }
+    end
+
+    after do
+      @publisher.disconnect!
+      @consumer.disconnect!
+    end
+
+    it 'transports messages from publisher to consumer' do
+      latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+      messages = []
+      @consumer.subscribe(:blocking => false) do |headers, message|
+        messages << message
+        headers.ack
+        latch.count_down
+      end
+      @messages.each { |msg| @publisher.publish(msg) }
+      latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+      messages.sort.should == @messages.sort
+    end
+  end
 end
