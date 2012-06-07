@@ -12,8 +12,9 @@ Gem::Specification.new do |s|
 
   s.rubyforge_project = 'autobahn'
   
-  s.add_dependency 'hot_bunnies', '~> 1.3.7'
+  s.add_dependency 'hot_bunnies', '~> 1.3.8'
   s.add_dependency 'httpclient', '~> 2.2.5'
+  s.add_dependency 'jruby-openssl'
   s.add_dependency 'json'
 
   s.files         = Dir['lib/**/*.rb']

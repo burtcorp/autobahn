@@ -69,12 +69,14 @@ describe Autobahn do
 
     it 'publishes a message' do
       @publisher.publish('hello world')
+      sleep(0.1) # allow time for for delivery
       message_count = @queues.reduce(0) { |n, q| n + q.status.first }
       message_count.should == 1
     end
 
     it 'publishes messages to random routing keys' do
       200.times { |i| @publisher.publish("hello world #{i}") }
+      sleep(0.1) # allow time for for delivery
       message_counts = @queues.map { |q| q.status.first }
       message_counts.reduce(:+).should == 200
       message_counts.each { |c| c.should_not == 0 }
@@ -100,7 +102,7 @@ describe Autobahn do
     context 'when subscribed' do
       it 'delivers all available messages to the subscriber' do
         latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
-        @consumer.subscribe(:blocking => false) do |headers, message|
+        @consumer.subscribe do |headers, message|
           headers.ack
           latch.count_down
         end
@@ -108,7 +110,7 @@ describe Autobahn do
       end
 
       it 'subscribes to queues over connections to the node hosting the queue' do
-        @consumer.subscribe(:blocking => false) { |headers, message| }
+        @consumer.subscribe { |headers, message| }
         queue_names.each do |queue_name|
           queue_info = @transport_system.cluster.queue("%2F/#{queue_name}")
           queue_node = queue_info['node']
@@ -120,6 +122,22 @@ describe Autobahn do
           end
           consumers.uniq.should == [queue_node]
         end
+      end
+    end
+
+    context 'using low level operations' do
+      it 'exposes a raw interface for fetching the next message off of the local buffer' do
+        messages = []
+        messages << @consumer.next
+        messages << @consumer.next
+        messages.should have(2).items
+      end
+
+      it 'allows the client to ack with consumer and delivery tags' do
+        headers, message = @consumer.next
+        @consumer.ack(headers.consumer_tag, headers.delivery_tag)
+        @consumer.disconnect!
+        @queues.map { |q| q.status.first }.reduce(:+).should == 35
       end
     end
   end
@@ -142,7 +160,7 @@ describe Autobahn do
     it 'transports messages from publisher to consumer' do
       latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
       messages = []
-      @consumer.subscribe(:blocking => false) do |headers, message|
+      @consumer.subscribe do |headers, message|
         messages << message
         headers.ack
         latch.count_down

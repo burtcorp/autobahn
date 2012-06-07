@@ -27,10 +27,10 @@ module Autobahn
       @publishers = []
     end
 
-    def consumer
+    def consumer(options={})
       setup!
       connect!
-      @consumers << Consumer.new(@routing, @connections)
+      @consumers << Consumer.new(@routing, @connections, options)
       @consumers.last
     end
 
@@ -99,26 +99,56 @@ module Autobahn
   end
 
   class Consumer
-    def initialize(routing, connections)
+    def initialize(routing, connections, options)
       @routing = routing
       @connections = connections
+      @options = options
+      @extra_workers = 0
+      @subscribed = false
+      @running = false
     end
 
-    def subscribe(options={}, &handler)
-      return if defined? @subscriptions
-      internal_queue = Concurrency::LinkedBlockingQueue.new
-      @subscriber_pool = create_thread_pool(queues.size + (options[:blocking] ? 0 : 1))
-      @subscriptions = queues.map { |queue| queue.subscribe(:ack => true) }
-      @subscriptions.each do |subscription|
-        subscription.each(:blocking => false, :executor => @subscriber_pool) do |headers, message|
+    def setup!
+      return if @subscribed
+      subscriptions.each do |subscription|
+        subscription.each(:blocking => false, :executor => worker_pool) do |headers, message|
           internal_queue.put([headers, message])
         end
       end
-      if options[:blocking]
-        deliver(internal_queue, handler)
+      @running = true
+      @subscribed = true
+    end
+
+    def subscribe(options={}, &handler)
+      raise 'Already subscribed!' if @subscribed
+      mode = options[:mode] || :async
+      case mode
+      when :async
+        @extra_workers += 1
+        worker_pool.execute { deliver(handler) }
+      when :blocking
+        deliver(handler)
       else
-        @subscriber_pool.execute { deliver(internal_queue, handler) }
+        raise ArgumentError, "Not a valid subscription mode: #{mode}"
       end
+      nil
+    end
+
+    def next(timeout=nil)
+      setup!
+      if timeout
+        internal_queue.poll((timeout * 1000).to_i, Concurrency::TimeUnit::MILLISECONDS)
+      else
+        internal_queue.take
+      end
+    end
+
+    def ack(consumer_tag, delivery_tag, options={})
+      find_subscription(consumer_tag).basic_ack(delivery_tag, !!options[:multiple])
+    end
+
+    def reject(consumer_tag, delivery_tag, options={})
+      find_subscription(consumer_tag).basic_reject(delivery_tag, !!options[:requeue])
     end
 
     def disconnect!
@@ -132,32 +162,52 @@ module Autobahn
         @queues.map(&:channel).each(&:close)
         @queues = nil
       end
-      if @subscriber_pool
-        @subscriber_pool.shutdown
-        if @subscriber_pool.await_termination(5, Concurrency::TimeUnit::SECONDS)
-          @subscriber_pool = nil
-        else
+      if @worker_pool
+        @worker_pool.shutdown
+        unless @worker_pool.await_termination(5, Concurrency::TimeUnit::SECONDS)
           # TODO: log an error
         end
+        @worker_pool = nil
       end
     end
 
     private
 
-    def deliver(internal_queue, handler)
-      @running = true
-      while @running
-        headers, message = internal_queue.poll(1, Concurrency::TimeUnit::SECONDS)
+    def deliver(handler)
+      begin
+        headers, message = self.next(1)
         handler.call(headers, message) if headers
-      end
+      end while @running
+    end
+
+    def worker_pool
+      @worker_pool ||= create_thread_pool(queues.size + @extra_workers)
+    end
+
+    def subscriptions
+      @subscriptions ||= queues.map { |queue| queue.subscribe(:ack => true) }
+    end
+
+    def channels_by_consumer_tag
+      @channels_by_consumer_tag ||= Hash[subscriptions.map { |s| [s.consumer_tag, s.channel] }]
+    end
+
+    def internal_queue
+      @internal_queue ||= Concurrency::LinkedBlockingQueue.new
     end
 
     def queues
       @queues ||= @routing.map do|queue_name, meta|
         channel = @connections[meta[:node]].create_channel
-        channel.prefetch = 10
+        channel.prefetch = @options[:prefetch] if @options[:prefetch]
         channel.queue(queue_name, :passive => true)
       end
+    end
+
+    def find_subscription(consumer_tag)
+      subscription = channels_by_consumer_tag[consumer_tag]
+      raise ArgumentError, 'Invalid consumer tag' unless subscription
+      subscription
     end
 
     def create_thread_pool(size)
