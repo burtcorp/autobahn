@@ -1,8 +1,7 @@
 source :rubygems
 
-gem 'hot_bunnies'
-gem 'httpclient'
-gem 'json'
+gemspec
+
 gem 'jruby-openssl'
 
 group :test do
