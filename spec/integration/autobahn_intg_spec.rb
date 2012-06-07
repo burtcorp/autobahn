@@ -68,6 +68,29 @@ describe Autobahn do
     @queues.each(&:purge)
   end
 
+  describe 'Publishing to a transport system' do
+    before do
+      @publisher = @transport_system.publisher
+    end
+
+    after do
+      @publisher.disconnect!
+    end
+
+    it 'publishes a message' do
+      @publisher.publish('hello world')
+      message_count = @queues.reduce(0) { |n, q| n + q.status.first }
+      message_count.should == 1
+    end
+
+    it 'publishes messages to random routing keys' do
+      200.times { |i| @publisher.publish("hello world #{i}") }
+      message_counts = @queues.map { |q| q.status.first }
+      message_counts.reduce(:+).should == 200
+      message_counts.each { |c| c.should_not == 0 }
+    end
+  end
+
   describe 'Consuming a transport system' do
     before do
       @messages = (num_queues * 3).times.map { |i| "foo#{i}" }
