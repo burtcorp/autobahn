@@ -98,11 +98,34 @@ module Autobahn
     end
   end
 
+  class SubsetConsumerStrategy
+    def initialize(consumer_index, num_consumers, mode=:range)
+      @consumer_index, @num_consumers, @mode = consumer_index, num_consumers, mode
+    end
+
+    def subscribe?(index, total_count)
+      if @mode == :modulo
+        index % @num_consumers == @consumer_index
+      else
+        range_width = total_count/@num_consumers
+        start_index = range_width * @consumer_index
+        index >= start_index && index < start_index + range_width
+      end
+    end
+  end
+
+  class DefaultConsumerStrategy
+    def subscribe?(index, total_count)
+      true
+    end
+  end
+
   class Consumer
     def initialize(routing, connections, options)
       @routing = routing
       @connections = connections
       @options = options
+      @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @extra_workers = 0
       @subscribed = false
       @running = false
@@ -197,11 +220,15 @@ module Autobahn
     end
 
     def queues
-      @queues ||= @routing.map do|queue_name, meta|
-        channel = @connections[meta[:node]].create_channel
-        channel.prefetch = @options[:prefetch] if @options[:prefetch]
-        channel.queue(queue_name, :passive => true)
-      end
+      @queues ||= @routing.sort.each_with_index.map do |(queue_name, meta), i|
+        if @strategy.subscribe?(i, @routing.size)
+          channel = @connections[meta[:node]].create_channel
+          channel.prefetch = @options[:prefetch] if @options[:prefetch]
+          channel.queue(queue_name, :passive => true)
+        else
+          nil
+        end
+      end.compact
     end
 
     def find_subscription(consumer_tag)

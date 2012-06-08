@@ -123,6 +123,20 @@ describe Autobahn do
           consumers.uniq.should == [queue_node]
         end
       end
+
+      it 'uses the specified consumer strategy to decide which queues to subscribe to' do
+        @consumer.disconnect!
+        @consumer = @transport_system.consumer(:strategy => Autobahn::SubsetConsumerStrategy.new(2, 3))
+        @consumer.subscribe { |headers, message| }
+        subscribed_queues = queue_names.reduce([]) do |acc, queue_name|
+          queue_info = @transport_system.cluster.queue("%2F/#{queue_name}")
+          queue_node = queue_info['node']
+          consumers = queue_info['consumer_details']
+          acc << queue_name if consumers.size > 0
+          acc
+        end
+        subscribed_queues.should == queue_names[8, 4]
+      end
     end
 
     context 'using low level operations' do
