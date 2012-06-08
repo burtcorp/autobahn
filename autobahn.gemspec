@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |s|
   s.name        = 'autobahn'
-  s.version     = '1.0.0'
+  s.version     = '1.0.1'
   s.platform    = 'java'
   s.authors     = ['The Burt Platform Team']
   s.email       = ['platform@burtcorp.com']
