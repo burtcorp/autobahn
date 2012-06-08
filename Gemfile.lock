@@ -11,12 +11,20 @@ GEM
   remote: http://rubygems.org/
   specs:
     bouncy-castle-java (1.5.0146.1)
+    builder (3.0.0)
     diff-lcs (1.1.3)
+    geminabox (0.6.1)
+      builder
+      httpclient
+      sinatra
     hot_bunnies (1.3.8-java)
     httpclient (2.2.5)
     jruby-openssl (0.7.6.1)
       bouncy-castle-java (>= 1.5.0146.1)
     json (1.7.3-java)
+    rack (1.4.1)
+    rack-protection (1.2.0)
+      rack
     rspec (2.10.0)
       rspec-core (~> 2.10.0)
       rspec-expectations (~> 2.10.0)
@@ -25,11 +33,16 @@ GEM
     rspec-expectations (2.10.0)
       diff-lcs (~> 1.1.3)
     rspec-mocks (2.10.1)
+    sinatra (1.3.2)
+      rack (~> 1.3, >= 1.3.6)
+      rack-protection (~> 1.2)
+      tilt (~> 1.3, >= 1.3.3)
+    tilt (1.3.3)
 
 PLATFORMS
   java
 
 DEPENDENCIES
   autobahn!
-  jruby-openssl
+  geminabox
   rspec

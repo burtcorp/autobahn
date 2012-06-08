@@ -2,7 +2,9 @@ source :rubygems
 
 gemspec
 
-gem 'jruby-openssl'
+group :development do
+  gem 'geminabox'
+end
 
 group :test do
   gem 'rspec'
