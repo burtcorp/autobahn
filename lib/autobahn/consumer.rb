@@ -2,9 +2,10 @@
 
 module Autobahn
   class Consumer
-    def initialize(routing, connections, options)
+    def initialize(routing, connections, encoder, options)
       @routing = routing
       @connections = connections
+      @encoder = encoder
       @options = options
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @extra_workers = 0
@@ -15,7 +16,8 @@ module Autobahn
     def setup!
       return if @subscribed
       subscriptions.each do |subscription|
-        subscription.each(:blocking => false, :executor => worker_pool) do |headers, message|
+        subscription.each(:blocking => false, :executor => worker_pool) do |headers, encoded_message|
+          message = @encoder.decode(encoded_message)
           internal_queue.put([headers, message])
         end
       end

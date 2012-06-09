@@ -3,6 +3,7 @@
 require 'autobahn/version'
 require 'autobahn/concurrency'
 require 'autobahn/cluster'
+require 'autobahn/encoder'
 require 'autobahn/publisher'
 require 'autobahn/consumer_strategy'
 require 'autobahn/consumer'

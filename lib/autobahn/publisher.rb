@@ -2,16 +2,18 @@
 
 module Autobahn
   class Publisher
-    def initialize(exchange_name, routing, connections)
+    def initialize(exchange_name, routing, connections, encoder)
       @exchange_name = exchange_name
       @routing = routing
       @connections = connections
+      @encoder = encoder
     end
 
     def publish(message)
       rk = routing_keys.sample
       ex = exchanges_by_routing_key[rk]
-      ex.publish(message, :routing_key => rk)
+      em = @encoder.encode(message)
+      ex.publish(em, :routing_key => rk)
     end
 
     def disconnect!

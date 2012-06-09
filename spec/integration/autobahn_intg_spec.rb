@@ -9,6 +9,7 @@ describe Autobahn do
   let(:num_queues) { num_nodes * num_queues_per_node }
   let(:base_port) { 6672 }
   let(:api_base_port) { 56672 }
+  let(:api_uri) { "http://localhost:#{api_base_port}/api" }
   let(:exchange_name) { 'test_exchange' }
   let(:queue_prefix) { 'test_queue_' }
   let(:routing_key_prefix) { 'test_rk_' }
@@ -35,7 +36,7 @@ describe Autobahn do
   end
 
   before :all do
-    @transport_system = Autobahn::TransportSystem.new("http://localhost:#{api_base_port}/api", exchange_name)
+    @transport_system = Autobahn.transport_system(api_uri, exchange_name)
   end
 
   after :all do
@@ -81,6 +82,22 @@ describe Autobahn do
       message_counts.reduce(:+).should == 200
       message_counts.each { |c| c.should_not == 0 }
     end
+
+    it 'uses the provided encoder to encode messages' do
+      begin
+        transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+        publisher = transport_system.publisher
+        publisher.publish({'hello' => 'world'})
+        sleep(0.1) # allow time for delivery
+        @queues.map { |q| h, m = q.get; m }.compact.first.should == '{"hello":"world"}'
+      ensure
+        transport_system.disconnect! if transport_system
+      end
+    end
+
+    it 'uses the provided batch strategy to send multiple messages per together'
+
+    it 'uses the provided publishing strategy for selecting the routing keys to publish to'
   end
 
   describe 'Consuming a transport system' do
@@ -169,34 +186,66 @@ describe Autobahn do
         @queues.map { |q| q.status.first }.reduce(:+).should == 35
       end
     end
+
+    context 'with encoded messages' do
+      it 'uses the provided encoder to decode messages' do
+        begin
+          @queues.each(&:purge)
+          transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+          @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample)
+          consumer = transport_system.consumer
+          h, m = consumer.next
+          m.should == {'hello' => 'world'}
+        ensure
+          transport_system.disconnect! if transport_system
+        end
+      end
+    end
   end
 
   describe 'Transporting data through a transport system' do
-    before do
-      @publisher = @transport_system.publisher
-      @consumer = @transport_system.consumer
-    end
-
-    before do
-      @messages = 200.times.map { |i| "foo#{i}" }
-    end
-
-    after do
-      @publisher.disconnect!
-      @consumer.disconnect!
-    end
-
     it 'transports messages from publisher to consumer' do
-      latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
-      messages = []
-      @consumer.subscribe do |headers, message|
-        messages << message
-        headers.ack
-        latch.count_down
+      begin
+        publisher = @transport_system.publisher
+        consumer = @transport_system.consumer
+        messages = 200.times.map { |i| "foo#{i}" }
+        latch = Autobahn::Concurrency::CountDownLatch.new(messages.size)
+        recv_messages = []
+        consumer.subscribe do |headers, message|
+          recv_messages << message
+          headers.ack
+          latch.count_down
+        end
+        messages.each { |msg| publisher.publish(msg) }
+        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        recv_messages.sort.should == messages.sort
+      ensure
+        publisher.disconnect!
+        consumer.disconnect!
       end
-      @messages.each { |msg| @publisher.publish(msg) }
-      latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
-      messages.sort.should == @messages.sort
     end
+
+    it 'uses the provided encoder to pack and unpack objects' do
+      begin
+        transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+        publisher = transport_system.publisher
+        consumer = transport_system.consumer
+        messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
+        latch = Autobahn::Concurrency::CountDownLatch.new(messages.size)
+        recv_messages = []
+        consumer.subscribe do |headers, message|
+          recv_messages << message
+          headers.ack
+          latch.count_down
+        end
+        messages.each { |msg| publisher.publish(msg) }
+        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        recv_messages.sort_by { |m| m['foo'] }.should == messages.sort_by { |m| m['foo'] }
+      ensure
+        transport_system.disconnect! if transport_system
+      end
+    end
+
+    it 'uses the provided batch builder to bundle up objects together for transport'
   end
 end

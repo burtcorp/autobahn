@@ -10,7 +10,8 @@ module Autobahn
     def initialize(api_uri, exchange_name, options={})
       @cluster = Cluster.new(api_uri, options)
       @exchange_name = exchange_name
-      @host_resolver = options[:host_resolver] || method(:default_host_resolver)
+      @host_resolver = options[:host_resolver] || DefaultHostResolver.new
+      @encoder = options[:encoder] || StringEncoder.new
       @consumers = []
       @publishers = []
     end
@@ -18,14 +19,14 @@ module Autobahn
     def consumer(options={})
       setup!
       connect!
-      @consumers << Consumer.new(@routing, @connections, options)
+      @consumers << Consumer.new(@routing, @connections, @encoder, options)
       @consumers.last
     end
 
     def publisher
       setup!
       connect!
-      @publishers << Publisher.new(@exchange_name, @routing, @connections)
+      @publishers << Publisher.new(@exchange_name, @routing, @connections, @encoder)
       @publishers.last
     end
 
@@ -36,6 +37,12 @@ module Autobahn
     end
 
     private
+
+    class DefaultHostResolver
+      def resolve(node)
+        node.split('@').last
+      end
+    end
 
     def setup!
       return if defined? @routing
@@ -63,12 +70,8 @@ module Autobahn
       end
     end
 
-    def default_host_resolver(node)
-      node.split('@').last
-    end
-
     def connection_configuration(node)
-      host = @host_resolver.call(node)
+      host = @host_resolver.resolve(node)
       {:host => host, :port => node_ports[node]}
     end
 
