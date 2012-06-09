@@ -1,8 +1,13 @@
 # encoding: utf-8
 
+$: << File.expand_path('../lib', __FILE__)
+
+require 'autobahn/version'
+
+
 Gem::Specification.new do |s|
   s.name        = 'autobahn'
-  s.version     = '1.0.1'
+  s.version     = Autobahn::VERSION
   s.platform    = 'java'
   s.authors     = ['The Burt Platform Team']
   s.email       = ['platform@burtcorp.com']
