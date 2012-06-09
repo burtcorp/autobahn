@@ -137,6 +137,21 @@ describe Autobahn do
         end
         subscribed_queues.should == queue_names[8, 4]
       end
+
+      it 'does not receive messages after it has been unsubscribed' do
+        latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+        message_count = 0
+        @consumer.subscribe do |headers, message|
+          message_count += 1
+          headers.ack
+          latch.count_down
+        end
+        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        @consumer.unsubscribe!
+        @exchange.publish('foo', :routing_key => routing_keys.sample)
+        sleep(0.1) # allow time for delivery
+        @queues.map { |q| q.status.first }.reduce(:+).should == 1
+      end
     end
 
     context 'using low level operations' do

@@ -174,13 +174,17 @@ module Autobahn
       find_subscription(consumer_tag).basic_reject(delivery_tag, !!options[:requeue])
     end
 
+    def unsubscribe!
+      return unless @subscribed
+      @subscriptions.each(&:cancel)
+      @subscriptions = nil
+      @subscribed = false
+    end
+
     def disconnect!
       return unless @running
       @running = false
-      if @subscriptions
-        @subscriptions.each(&:cancel)
-        @subscriptions = nil
-      end
+      unsubscribe!
       if @queues
         @queues.map(&:channel).each(&:close)
         @queues = nil
