@@ -7,7 +7,7 @@ require 'autobahn/version'
 
 Gem::Specification.new do |s|
   s.name        = 'autobahn'
-  s.version     = Autobahn::VERSION
+  s.version     = Autobahn::VERSION.dup
   s.platform    = 'java'
   s.authors     = ['The Burt Platform Team']
   s.email       = ['platform@burtcorp.com']
