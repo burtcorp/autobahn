@@ -2,15 +2,16 @@
 
 module Autobahn
   class Publisher
-    def initialize(exchange_name, routing, connections, encoder)
+    def initialize(exchange_name, routing, connections, encoder, options={})
       @exchange_name = exchange_name
       @routing = routing
       @connections = connections
       @encoder = encoder
+      @strategy = options[:strategy] || RandomPublisherStrategy.new
     end
 
     def publish(message)
-      rk = routing_keys.sample
+      rk = @strategy.select_routing_key(routing_keys, message)
       ex = exchanges_by_routing_key[rk]
       em = @encoder.encode(message)
       ex.publish(em, :routing_key => rk)

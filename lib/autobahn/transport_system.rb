@@ -23,10 +23,10 @@ module Autobahn
       @consumers.last
     end
 
-    def publisher
+    def publisher(options={})
       setup!
       connect!
-      @publishers << Publisher.new(@exchange_name, @routing, @connections, @encoder)
+      @publishers << Publisher.new(@exchange_name, @routing, @connections, @encoder, options)
       @publishers.last
     end
 

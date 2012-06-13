@@ -95,9 +95,21 @@ describe Autobahn do
       end
     end
 
-    it 'uses the provided batch strategy to send multiple messages per together'
+    it 'uses the provided strategy to select routing keys' do
+      strategy = Autobahn::PropertyGroupingPublisherStrategy.new('genus', :hash => :crc32)
+      @publisher.disconnect!
+      @publisher = @transport_system.publisher(:strategy => strategy, :encoder => Autobahn::JsonEncoder.new)
+      @publisher.publish('name' => 'Common chimpanzee',      'species' => 'Pan troglodytes',  'genus' => 'Pan')
+      @publisher.publish('name' => 'Bonobo',                 'species' => 'Pan paniscus',     'genus' => 'Pan')
+      @publisher.publish('name' => 'Common squirrel monkey', 'species' => 'Saimiri sciureus', 'genus' => 'Saimiri')
+      @publisher.publish('name' => 'Rhesus macaque',         'species' => 'Macaca mulatta',   'genus' => 'Macaca')
+      @publisher.publish('name' => 'Sumatran orangutan',     'species' => 'Pongo abelii',     'genus' => 'Pongo')
+      sleep(0.1) # allow time for delivery
+      queue_sizes = @queues.map { |q| q.status.first }
+      queue_sizes.should == [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 2]
+    end
 
-    it 'uses the provided publishing strategy for selecting the routing keys to publish to'
+    it 'uses the provided batch strategy to send multiple messages per together'
   end
 
   describe 'Consuming a transport system' do
