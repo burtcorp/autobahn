@@ -68,48 +68,56 @@ describe Autobahn do
       @publisher.disconnect!
     end
 
-    it 'publishes a message' do
-      @publisher.publish('hello world')
-      sleep(0.1) # allow time for for delivery
-      message_count = @queues.reduce(0) { |n, q| n + q.status.first }
-      message_count.should == 1
-    end
+    context 'when publishing' do
+      it 'publishes a message' do
+        @publisher.publish('hello world')
+        sleep(0.1) # allow time for for delivery
+        message_count = @queues.reduce(0) { |n, q| n + q.status.first }
+        message_count.should == 1
+      end
 
-    it 'publishes messages to random routing keys' do
-      200.times { |i| @publisher.publish("hello world #{i}") }
-      sleep(0.1) # allow time for for delivery
-      message_counts = @queues.map { |q| q.status.first }
-      message_counts.reduce(:+).should == 200
-      message_counts.each { |c| c.should_not == 0 }
-    end
-
-    it 'uses the provided encoder to encode messages' do
-      begin
-        transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
-        publisher = transport_system.publisher
-        publisher.publish({'hello' => 'world'})
-        sleep(0.1) # allow time for delivery
-        @queues.map { |q| h, m = q.get; m }.compact.first.should == '{"hello":"world"}'
-      ensure
-        transport_system.disconnect! if transport_system
+      it 'publishes messages to random routing keys' do
+        200.times { |i| @publisher.publish("hello world #{i}") }
+        sleep(0.1) # allow time for for delivery
+        message_counts = @queues.map { |q| q.status.first }
+        message_counts.reduce(:+).should == 200
+        message_counts.each { |c| c.should_not == 0 }
       end
     end
 
-    it 'uses the provided strategy to select routing keys' do
-      strategy = Autobahn::PropertyGroupingPublisherStrategy.new('genus', :hash => :crc32)
-      @publisher.disconnect!
-      @publisher = @transport_system.publisher(:strategy => strategy, :encoder => Autobahn::JsonEncoder.new)
-      @publisher.publish('name' => 'Common chimpanzee',      'species' => 'Pan troglodytes',  'genus' => 'Pan')
-      @publisher.publish('name' => 'Bonobo',                 'species' => 'Pan paniscus',     'genus' => 'Pan')
-      @publisher.publish('name' => 'Common squirrel monkey', 'species' => 'Saimiri sciureus', 'genus' => 'Saimiri')
-      @publisher.publish('name' => 'Rhesus macaque',         'species' => 'Macaca mulatta',   'genus' => 'Macaca')
-      @publisher.publish('name' => 'Sumatran orangutan',     'species' => 'Pongo abelii',     'genus' => 'Pongo')
-      sleep(0.1) # allow time for delivery
-      queue_sizes = @queues.map { |q| q.status.first }
-      queue_sizes.should == [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 2]
+    context 'with encoded messages' do
+      it 'uses the provided encoder to encode messages' do
+        begin
+          transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+          publisher = transport_system.publisher
+          publisher.publish({'hello' => 'world'})
+          sleep(0.1) # allow time for delivery
+          @queues.map { |q| h, m = q.get; m }.compact.first.should == '{"hello":"world"}'
+        ensure
+          transport_system.disconnect! if transport_system
+        end
+      end
     end
 
-    it 'uses the provided batch strategy to send multiple messages per together'
+    context 'with custom strategies' do
+      it 'uses the provided strategy to select routing keys' do
+        strategy = Autobahn::PropertyGroupingPublisherStrategy.new('genus', :hash => :crc32)
+        @publisher.disconnect!
+        @publisher = @transport_system.publisher(:strategy => strategy, :encoder => Autobahn::JsonEncoder.new)
+        @publisher.publish('name' => 'Common chimpanzee',      'species' => 'Pan troglodytes',  'genus' => 'Pan')
+        @publisher.publish('name' => 'Bonobo',                 'species' => 'Pan paniscus',     'genus' => 'Pan')
+        @publisher.publish('name' => 'Common squirrel monkey', 'species' => 'Saimiri sciureus', 'genus' => 'Saimiri')
+        @publisher.publish('name' => 'Rhesus macaque',         'species' => 'Macaca mulatta',   'genus' => 'Macaca')
+        @publisher.publish('name' => 'Sumatran orangutan',     'species' => 'Pongo abelii',     'genus' => 'Pongo')
+        sleep(0.1) # allow time for delivery
+        queue_sizes = @queues.map { |q| q.status.first }
+        queue_sizes.should == [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 2]
+      end
+    end
+
+    context 'with batched messages' do
+      it 'uses the provided batch strategy to send multiple messages per together'
+    end
   end
 
   describe 'Consuming a transport system' do
@@ -135,7 +143,7 @@ describe Autobahn do
           headers.ack
           latch.count_down
         end
-        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
       end
 
       it 'subscribes to queues over connections to the node hosting the queue' do
@@ -175,7 +183,7 @@ describe Autobahn do
           headers.ack
           latch.count_down
         end
-        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
         @consumer.unsubscribe!
         @exchange.publish('foo', :routing_key => routing_keys.sample)
         sleep(0.1) # allow time for delivery
@@ -213,6 +221,10 @@ describe Autobahn do
         end
       end
     end
+
+    context 'with batched messages' do
+      it 'unpacks batches and tracks the ack state of the whole batch'
+    end
   end
 
   describe 'Transporting data through a transport system' do
@@ -229,7 +241,7 @@ describe Autobahn do
           latch.count_down
         end
         messages.each { |msg| publisher.publish(msg) }
-        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
         recv_messages.sort.should == messages.sort
       ensure
         publisher.disconnect!
@@ -251,7 +263,7 @@ describe Autobahn do
           latch.count_down
         end
         messages.each { |msg| publisher.publish(msg) }
-        latch.await(5, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
         recv_messages.sort_by { |m| m['foo'] }.should == messages.sort_by { |m| m['foo'] }
       ensure
         transport_system.disconnect! if transport_system
