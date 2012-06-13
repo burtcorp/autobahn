@@ -103,7 +103,7 @@ module Autobahn
     end
 
     def internal_queue
-      @internal_queue ||= Concurrency::LinkedBlockingQueue.new
+      @internal_queue ||= Concurrency::LinkedBlockingQueue.new(@options[:buffer_size] || (2**31 - 1))
     end
 
     def queues
