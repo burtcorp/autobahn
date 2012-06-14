@@ -16,8 +16,10 @@ describe Autobahn do
   let(:queue_names) { num_queues.times.map { |i| "#{queue_prefix}#{i.to_s.rjust(2, '0')}" } }
   let(:routing_keys) { num_queues.times.map { |i| "#{routing_key_prefix}#{i.to_s.rjust(2, '0')}" } }
 
-  def await!(latch, timeout=10)
-    latch.await(timeout, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+  def counting_down(n, options={})
+    latch = Autobahn::Concurrency::CountDownLatch.new(n)
+    yield latch
+    latch.await(options[:timeout] || 10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
   end
 
   before :all do
@@ -141,13 +143,17 @@ describe Autobahn do
     end
 
     context 'when subscribed' do
+      before do
+        @latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+      end
+
       it 'delivers all available messages to the subscriber' do
-        latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
-        @consumer.subscribe do |headers, message|
-          headers.ack
-          latch.count_down
+        counting_down(@messages.size) do |latch|
+          @consumer.subscribe do |headers, message|
+            headers.ack
+            latch.count_down
+          end
         end
-        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
       end
 
       it 'subscribes to queues over connections to the node hosting the queue' do
@@ -180,14 +186,14 @@ describe Autobahn do
       end
 
       it 'does not receive messages after it has been unsubscribed' do
-        latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
-        message_count = 0
-        @consumer.subscribe do |headers, message|
-          message_count += 1
-          headers.ack
-          latch.count_down
+        counting_down(@messages.size) do |latch|
+          message_count = 0
+          @consumer.subscribe do |headers, message|
+            message_count += 1
+            headers.ack
+            latch.count_down
+          end
         end
-        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
         @consumer.unsubscribe!
         @exchange.publish('foo', :routing_key => routing_keys.sample)
         sleep(0.1) # allow time for delivery
@@ -247,22 +253,23 @@ describe Autobahn do
 
       it 'unpacks batches' do
         received_messages = []
-        @consumer.subscribe do |headers, message|
-          received_messages << message
-          headers.ack
-          @latch.count_down
+        counting_down(@messages.size) do |latch|
+          @consumer.subscribe do |headers, message|
+            received_messages << message
+            headers.ack
+            latch.count_down
+          end
         end
-        await!(@latch)
         received_messages.sort.should == @messages.sort
       end
 
       it 'acks the batch, but only once' do
-        latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
-        @consumer.subscribe do |headers, message|
-          headers.ack
-          @latch.count_down
+        counting_down(@messages.size) do |latch|
+          @consumer.subscribe do |headers, message|
+            headers.ack
+            latch.count_down
+          end
         end
-        await!(@latch)
         @queues.map { |q| c, _ = q.status; c }.reduce(:+).should == 0
       end
     end
@@ -274,15 +281,15 @@ describe Autobahn do
         publisher = @transport_system.publisher
         consumer = @transport_system.consumer
         messages = 200.times.map { |i| "foo#{i}" }
-        latch = Autobahn::Concurrency::CountDownLatch.new(messages.size)
         recv_messages = []
-        consumer.subscribe do |headers, message|
-          recv_messages << message
-          headers.ack
-          latch.count_down
+        counting_down(messages.size) do |latch|
+          consumer.subscribe do |headers, message|
+            recv_messages << message
+            headers.ack
+            latch.count_down
+          end
+          messages.each { |msg| publisher.publish(msg) }
         end
-        messages.each { |msg| publisher.publish(msg) }
-        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
         recv_messages.sort.should == messages.sort
       ensure
         publisher.disconnect!
@@ -296,15 +303,15 @@ describe Autobahn do
         publisher = transport_system.publisher
         consumer = transport_system.consumer
         messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
-        latch = Autobahn::Concurrency::CountDownLatch.new(messages.size)
         recv_messages = []
-        consumer.subscribe do |headers, message|
-          recv_messages << message
-          headers.ack
-          latch.count_down
+        counting_down(messages.size) do |latch|
+          consumer.subscribe do |headers, message|
+            recv_messages << message
+            headers.ack
+            latch.count_down
+          end
+          messages.each { |msg| publisher.publish(msg) }
         end
-        messages.each { |msg| publisher.publish(msg) }
-        latch.await(10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
         recv_messages.sort_by { |m| m['foo'] }.should == messages.sort_by { |m| m['foo'] }
       ensure
         transport_system.disconnect! if transport_system
