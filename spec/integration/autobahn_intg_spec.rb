@@ -16,6 +16,10 @@ describe Autobahn do
   let(:queue_names) { num_queues.times.map { |i| "#{queue_prefix}#{i.to_s.rjust(2, '0')}" } }
   let(:routing_keys) { num_queues.times.map { |i| "#{routing_key_prefix}#{i.to_s.rjust(2, '0')}" } }
 
+  def await!(latch, timeout=10)
+    latch.await(timeout, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+  end
+
   before :all do
     begin
       num_nodes.times do |i|
@@ -223,7 +227,44 @@ describe Autobahn do
     end
 
     context 'with batched messages' do
-      it 'unpacks batches and tracks the ack state of the whole batch'
+      before do
+        @queues.each(&:purge)
+        @encoder = Autobahn::JsonEncoder.new
+        @batch_size = @messages.size/2
+        options = {
+          :encoder => @encoder,
+          :batcher => Autobahn::Batcher.new(:size => @batch_size, :timeout => 2)
+        }
+        @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+        @messages.each_slice(@batch_size) { |batch| @exchange.publish(@encoder.encode(batch), :routing_key => routing_keys.sample) }
+        @latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+        @consumer = @batching_transport_system.consumer
+      end
+
+      after do
+        @batching_transport_system.disconnect! if @batching_transport_system
+      end
+
+      it 'unpacks batches' do
+        received_messages = []
+        @consumer.subscribe do |headers, message|
+          received_messages << message
+          headers.ack
+          @latch.count_down
+        end
+        await!(@latch)
+        received_messages.sort.should == @messages.sort
+      end
+
+      it 'acks the batch, but only once' do
+        latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+        @consumer.subscribe do |headers, message|
+          headers.ack
+          @latch.count_down
+        end
+        await!(@latch)
+        @queues.map { |q| c, _ = q.status; c }.reduce(:+).should == 0
+      end
     end
   end
 

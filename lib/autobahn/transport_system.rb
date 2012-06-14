@@ -12,6 +12,7 @@ module Autobahn
       @exchange_name = exchange_name
       @host_resolver = options[:host_resolver] || DefaultHostResolver.new
       @encoder = options[:encoder] || StringEncoder.new
+      @batcher = options[:batcher]
       @consumers = []
       @publishers = []
     end
@@ -19,7 +20,9 @@ module Autobahn
     def consumer(options={})
       setup!
       connect!
-      @consumers << Consumer.new(@routing, @connections, @encoder, options)
+      consumer = Consumer.new(@routing, @connections, @encoder, options)
+      consumer = BatchConsumer.new(consumer, @batcher) if @batcher
+      @consumers << consumer
       @consumers.last
     end
 

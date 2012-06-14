@@ -28,12 +28,14 @@ module Autobahn
     def subscribe(options={}, &handler)
       raise 'Already subscribed!' if @subscribed
       mode = options[:mode] || :async
+      consumer = options[:consumer] || self
+      timeout = options[:timeout] || 1
       case mode
       when :async
         @extra_workers += 1
-        worker_pool.execute { deliver(handler) }
+        worker_pool.execute { deliver(consumer, handler, timeout) }
       when :blocking
-        deliver(handler)
+        deliver(consumer, handler, timeout)
       else
         raise ArgumentError, "Not a valid subscription mode: #{mode}"
       end
@@ -83,9 +85,9 @@ module Autobahn
 
     private
 
-    def deliver(handler)
+    def deliver(consumer, handler, timeout)
       begin
-        headers, message = self.next(1)
+        headers, message = consumer.next(timeout)
         handler.call(headers, message) if headers
       end while @running
     end
@@ -127,6 +129,83 @@ module Autobahn
     def create_thread_pool(size)
       thread_factory = Concurrency::NamingDaemonThreadFactory.new('autobahn')
       Concurrency::Executors.new_fixed_thread_pool(size, thread_factory)
+    end
+  end
+
+  class BatchConsumer
+    def initialize(consumer, batcher)
+      @consumer = consumer
+      @batcher = batcher
+      @buffer = Concurrency::LinkedBlockingQueue.new
+    end
+
+    def setup!
+      @consumer.setup!
+    end
+
+    def subscribe(options={}, &handler)
+      @consumer.subscribe(options.merge(:consumer => self), &handler)
+    end
+
+    def next(timeout=nil)
+      headers, message = @buffer.poll
+      unless headers
+        headers, messages = @consumer.next(timeout)
+        if headers
+          batch_headers = BatchHeaders.new(headers, messages.size)
+          first_message = messages.shift
+          messages.each do |message|
+            @buffer.add([batch_headers, message])
+          end
+          return batch_headers, first_message
+        end
+      end
+      return headers, message
+    end
+
+    def ack(consumer_tag, delivery_tag, options={})
+      raise 'Not yet possible when batching'
+      @consumer.ack(consumer_tag, delivery_tag, options)
+    end
+
+    def reject(consumer_tag, delivery_tag, options={})
+      raise 'Not yet possible when batching'
+      @consumer.reject(consumer_tag, delivery_tag, options)
+    end
+
+    def unsubscribe!
+      @consumer.unsubscribe!
+    end
+
+    def disconnect!
+      @consumer.disconnect!
+    end
+  end
+
+  class BatchHeaders
+    def initialize(*args)
+      @headers, @batch_size = args
+      @acks = Concurrency::AtomicInteger.new
+    end
+
+    def ack(options={})
+      if @batch_size == @acks.increment_and_get
+        @headers.ack(options)
+      end
+    end
+
+    def reject(options={})
+      raise 'Not yet implemented'
+      @headers.reject(options)
+    end
+
+    def responds_to?(name)
+      super unless @headers.responds_to?(name)
+    end
+
+    def method_missing(name, *args, &block)
+      super unless @headers.responds_to?(name)
+      @headers.method_missing?(name, *args, &block)
     end
   end
 end
