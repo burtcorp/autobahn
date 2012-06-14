@@ -127,11 +127,8 @@ describe Autobahn do
   end
 
   describe 'Consuming a transport system' do
-    before do
-      @messages = (num_queues * 3).times.map { |i| "foo#{i}" }
-      @messages.each_with_index do |msg, i|
-        @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
-      end
+    let :messages do
+      (num_queues * 3).times.map { |i| "foo#{i}" }
     end
 
     before do
@@ -144,11 +141,13 @@ describe Autobahn do
 
     context 'when subscribed' do
       before do
-        @latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+        messages.each_with_index do |msg, i|
+          @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
+        end
       end
 
       it 'delivers all available messages to the subscriber' do
-        counting_down(@messages.size) do |latch|
+        counting_down(messages.size) do |latch|
           @consumer.subscribe do |headers, message|
             headers.ack
             latch.count_down
@@ -186,7 +185,7 @@ describe Autobahn do
       end
 
       it 'does not receive messages after it has been unsubscribed' do
-        counting_down(@messages.size) do |latch|
+        counting_down(messages.size) do |latch|
           message_count = 0
           @consumer.subscribe do |headers, message|
             message_count += 1
@@ -202,6 +201,13 @@ describe Autobahn do
     end
 
     context 'using low level operations' do
+      before do
+        messages.each_with_index do |msg, i|
+          @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
+        end
+      end
+
+
       it 'exposes a raw interface for fetching the next message off of the local buffer' do
         messages = []
         messages << @consumer.next
@@ -218,32 +224,33 @@ describe Autobahn do
     end
 
     context 'with encoded messages' do
+      before do
+        @encoded_transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+      end
+
+      after do
+        @encoded_transport_system.disconnect! if @encoded_transport_system
+      end
+
       it 'uses the provided encoder to decode messages' do
-        begin
-          @queues.each(&:purge)
-          transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
-          @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample)
-          consumer = transport_system.consumer
-          h, m = consumer.next
-          m.should == {'hello' => 'world'}
-        ensure
-          transport_system.disconnect! if transport_system
-        end
+        @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample)
+        consumer = @encoded_transport_system.consumer
+        h, m = consumer.next
+        m.should == {'hello' => 'world'}
       end
     end
 
     context 'with batched messages' do
       before do
-        @queues.each(&:purge)
         @encoder = Autobahn::JsonEncoder.new
-        @batch_size = @messages.size/2
+        @batch_size = messages.size/2
         options = {
           :encoder => @encoder,
           :batcher => Autobahn::Batcher.new(:size => @batch_size, :timeout => 2)
         }
         @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
-        @messages.each_slice(@batch_size) { |batch| @exchange.publish(@encoder.encode(batch), :routing_key => routing_keys.sample) }
-        @latch = Autobahn::Concurrency::CountDownLatch.new(@messages.size)
+        messages.each_slice(@batch_size) { |batch| @exchange.publish(@encoder.encode(batch), :routing_key => routing_keys.sample) }
+        @latch = Autobahn::Concurrency::CountDownLatch.new(messages.size)
         @consumer = @batching_transport_system.consumer
       end
 
@@ -253,18 +260,18 @@ describe Autobahn do
 
       it 'unpacks batches' do
         received_messages = []
-        counting_down(@messages.size) do |latch|
+        counting_down(messages.size) do |latch|
           @consumer.subscribe do |headers, message|
             received_messages << message
             headers.ack
             latch.count_down
           end
         end
-        received_messages.sort.should == @messages.sort
+        received_messages.sort.should == messages.sort
       end
 
       it 'acks the batch, but only once' do
-        counting_down(@messages.size) do |latch|
+        counting_down(messages.size) do |latch|
           @consumer.subscribe do |headers, message|
             headers.ack
             latch.count_down
