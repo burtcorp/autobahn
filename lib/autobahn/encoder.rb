@@ -2,6 +2,10 @@
 
 module Autobahn
   class StringEncoder
+    def encodes_batches?
+      false
+    end
+
     def encode(obj)
       obj.to_s
     end
@@ -15,6 +19,10 @@ module Autobahn
     require 'json'
   
     class JsonEncoder
+      def encodes_batches?
+        true
+      end
+
       def encode(obj)
         obj.to_json
       end
@@ -30,6 +38,10 @@ module Autobahn
     require 'msgpack'
 
     class MsgPackEncoder
+      def encodes_batches?
+        true
+      end
+
       def encode(obj)
         MessagePack.pack(obj)
       end
@@ -45,6 +57,10 @@ module Autobahn
     require 'bson'
 
     class BsonEncoder
+      def encodes_batches?
+        true
+      end
+
       def encode(obj)
         BSON.serialize(obj).to_s
       end

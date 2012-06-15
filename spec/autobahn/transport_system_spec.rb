@@ -26,7 +26,7 @@ module Autobahn
         publisher.should_not be_nil
       end
 
-      it 'raises an error if :batch is specified, but not :encoder' do
+      it 'raises an error if batching is enabled, but not a batch-compatible encoder (e.g. the default)' do
         transport_system = described_class.new(api_uri, exchange_name, :batch => {:size => 3}, :cluster_factory => cluster_factory)
         expect { transport_system.publisher }.to raise_error(ArgumentError)
       end

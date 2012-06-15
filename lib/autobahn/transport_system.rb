@@ -29,7 +29,7 @@ module Autobahn
     def publisher(options={})
       setup!
       connect!
-      raise ArgumentError, 'Encoder needed when batching!' if @batch_options && StringEncoder === @encoder
+      raise ArgumentError, 'Encoder does not support batching!' if @batch_options && !@encoder.encodes_batches?
       publisher = Publisher.new(@exchange_name, @routing, @connections, @encoder, options)
       publisher = BatchPublisher.new(publisher, @batch_options).start! if @batch_options
       @publishers << publisher
