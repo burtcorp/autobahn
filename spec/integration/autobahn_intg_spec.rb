@@ -127,7 +127,7 @@ describe Autobahn do
         @batch_timeout = 1
         options = {
           :encoder => @encoder,
-          :batch => Autobahn::BatchOptions.new(:size => @batch_size, :timeout => @batch_timeout)
+          :batch => {:size => @batch_size, :timeout => @batch_timeout}
         }
         @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
         @publisher = @batching_transport_system.publisher
@@ -277,7 +277,7 @@ describe Autobahn do
         @batch_size = messages.size/2
         options = {
           :encoder => @encoder,
-          :batch => Autobahn::BatchOptions.new(:size => @batch_size, :timeout => 2)
+          :batch => {:size => @batch_size, :timeout => 2}
         }
         @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
         messages.each_slice(@batch_size) { |batch| @exchange.publish(@encoder.encode(batch), :routing_key => routing_keys.sample) }
@@ -357,7 +357,7 @@ describe Autobahn do
     end
 
     it 'transports messages in batches when configured to do so' do
-      transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new, :batch => Autobahn::BatchOptions.new(:size => 10, :timeout => 1))
+      transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new, :batch => {:size => 10, :timeout => 1})
       begin
         publisher = transport_system.publisher
         consumer = transport_system.consumer

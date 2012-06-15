@@ -48,16 +48,18 @@ module Autobahn
       @batch_options = batch_options
       @buffer = Concurrency::LinkedBlockingDeque.new
       @buffer_size = Concurrency::AtomicInteger.new
-      @scheduler = Concurrency::Executors.new_single_thread_scheduled_executor(Concurrency::NamingDaemonThreadFactory.new('batch_drainer'))
     end
 
     def start!
-      @drainer_task = @scheduler.schedule_with_fixed_delay(
-        method(:force_drain).to_proc, 
-        @batch_options.timeout, 
-        @batch_options.timeout, 
-        Concurrency::TimeUnit::SECONDS
-      )
+      if @batch_options[:timeout] && @batch_options[:timeout] > 0
+        @scheduler = Concurrency::Executors.new_single_thread_scheduled_executor(Concurrency::NamingDaemonThreadFactory.new('batch_drainer'))
+        @drainer_task = @scheduler.schedule_with_fixed_delay(
+          method(:force_drain).to_proc, 
+          @batch_options[:timeout], 
+          @batch_options[:timeout], 
+          Concurrency::TimeUnit::SECONDS
+        )
+      end
       self
     end
 
@@ -69,14 +71,18 @@ module Autobahn
 
     def disconnect!
       @drainer_task.cancel(false) if @drainer_task
-      @scheduler.shutdown
+      @scheduler.shutdown if @scheduler
       @publisher.disconnect!
     end
 
     private
 
+    def batch_size
+      @batch_options[:size] || 1
+    end
+
     def drain
-      while @buffer_size.get >= @batch_options.size
+      while @buffer_size.get >= batch_size
         # TODO: this block can be entered by two threads simultaneously since the 
         #       count will remain high until a bit further down, on the other hand
         #       the worst case result is batches with too few messages
@@ -86,7 +92,7 @@ module Autobahn
 
     def drain_batch
       batch = []
-      @batch_options.size.times do
+      batch_size.times do
         msg = @buffer.poll_first
         if msg
           batch << msg 
