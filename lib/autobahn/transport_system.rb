@@ -8,7 +8,7 @@ module Autobahn
     attr_reader :cluster
 
     def initialize(api_uri, exchange_name, options={})
-      @cluster = Cluster.new(api_uri, options)
+      @cluster = (options[:cluster_factory] || Cluster).new(api_uri, options)
       @exchange_name = exchange_name
       @host_resolver = options[:host_resolver] || DefaultHostResolver.new
       @encoder = options[:encoder] || StringEncoder.new
@@ -29,6 +29,7 @@ module Autobahn
     def publisher(options={})
       setup!
       connect!
+      raise ArgumentError, 'Encoder needed when batching!' if @batch_options && StringEncoder === @encoder
       publisher = Publisher.new(@exchange_name, @routing, @connections, @encoder, options)
       publisher = BatchPublisher.new(publisher, @batch_options).start! if @batch_options
       @publishers << publisher
