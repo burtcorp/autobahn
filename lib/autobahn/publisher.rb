@@ -14,7 +14,8 @@ module Autobahn
       rk = @strategy.select_routing_key(routing_keys, message)
       ex = exchanges_by_routing_key[rk]
       em = @encoder.encode(message)
-      ex.publish(em, :routing_key => rk)
+      op = {:routing_key => rk, :properties => {:content_type => @encoder.content_type}}
+      ex.publish(em, op)
     end
 
     def disconnect!

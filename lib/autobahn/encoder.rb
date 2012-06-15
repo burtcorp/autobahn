@@ -2,6 +2,12 @@
 
 module Autobahn
   class StringEncoder
+    CONTENT_TYPE = 'application/octet-stream'.freeze
+
+    def content_type
+      CONTENT_TYPE
+    end
+
     def encodes_batches?
       false
     end
@@ -19,6 +25,12 @@ module Autobahn
     require 'json'
   
     class JsonEncoder
+      CONTENT_TYPE = 'application/json'.freeze
+
+    def content_type
+      CONTENT_TYPE
+    end
+
       def encodes_batches?
         true
       end
@@ -38,6 +50,12 @@ module Autobahn
     require 'msgpack'
 
     class MsgPackEncoder
+      CONTENT_TYPE = 'application/msgpack'.freeze
+
+      def content_type
+        CONTENT_TYPE
+      end
+
       def encodes_batches?
         true
       end
@@ -57,6 +75,12 @@ module Autobahn
     require 'bson'
 
     class BsonEncoder
+      CONTENT_TYPE = 'application/bson'.freeze
+
+      def content_type
+        CONTENT_TYPE
+      end
+      
       def encodes_batches?
         true
       end
