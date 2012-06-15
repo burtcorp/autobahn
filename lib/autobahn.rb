@@ -8,7 +8,7 @@ require 'autobahn/publisher_strategy'
 require 'autobahn/publisher'
 require 'autobahn/consumer_strategy'
 require 'autobahn/consumer'
-require 'autobahn/batcher'
+require 'autobahn/batch_options'
 require 'autobahn/transport_system'
 
 

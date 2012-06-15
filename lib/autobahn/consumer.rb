@@ -28,7 +28,9 @@ module Autobahn
     def subscribe(options={}, &handler)
       raise 'Already subscribed!' if @subscribed
       mode = options[:mode] || :async
-      consumer = options[:consumer] || self
+      # TODO: this is a bit ugly, and is only here to support batching, 
+      #       this class shouldn't have to worry about that!
+      consumer = options[:consumer] || self 
       timeout = options[:timeout] || 1
       case mode
       when :async

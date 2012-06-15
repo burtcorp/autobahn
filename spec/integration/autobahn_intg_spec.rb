@@ -19,7 +19,7 @@ describe Autobahn do
   def counting_down(n, options={})
     latch = Autobahn::Concurrency::CountDownLatch.new(n)
     yield latch
-    latch.await(options[:timeout] || 10, Autobahn::Concurrency::TimeUnit::SECONDS).should be_true
+    latch.should_not time_out.within(options[:timeout])
   end
 
   before :all do
@@ -66,15 +66,15 @@ describe Autobahn do
   end
 
   describe 'Publishing to a transport system' do
-    before do
-      @publisher = @transport_system.publisher
-    end
-
-    after do
-      @publisher.disconnect!
-    end
-
     context 'when publishing' do
+      before do
+        @publisher = @transport_system.publisher
+      end
+
+      after do
+        @publisher.disconnect!
+      end
+
       it 'publishes a message' do
         @publisher.publish('hello world')
         sleep(0.1) # allow time for for delivery
@@ -108,13 +108,12 @@ describe Autobahn do
     context 'with custom strategies' do
       it 'uses the provided strategy to select routing keys' do
         strategy = Autobahn::PropertyGroupingPublisherStrategy.new('genus', :hash => :crc32)
-        @publisher.disconnect!
-        @publisher = @transport_system.publisher(:strategy => strategy, :encoder => Autobahn::JsonEncoder.new)
-        @publisher.publish('name' => 'Common chimpanzee',      'species' => 'Pan troglodytes',  'genus' => 'Pan')
-        @publisher.publish('name' => 'Bonobo',                 'species' => 'Pan paniscus',     'genus' => 'Pan')
-        @publisher.publish('name' => 'Common squirrel monkey', 'species' => 'Saimiri sciureus', 'genus' => 'Saimiri')
-        @publisher.publish('name' => 'Rhesus macaque',         'species' => 'Macaca mulatta',   'genus' => 'Macaca')
-        @publisher.publish('name' => 'Sumatran orangutan',     'species' => 'Pongo abelii',     'genus' => 'Pongo')
+        publisher = @transport_system.publisher(:strategy => strategy, :encoder => Autobahn::JsonEncoder.new)
+        publisher.publish('name' => 'Common chimpanzee',      'species' => 'Pan troglodytes',  'genus' => 'Pan')
+        publisher.publish('name' => 'Bonobo',                 'species' => 'Pan paniscus',     'genus' => 'Pan')
+        publisher.publish('name' => 'Common squirrel monkey', 'species' => 'Saimiri sciureus', 'genus' => 'Saimiri')
+        publisher.publish('name' => 'Rhesus macaque',         'species' => 'Macaca mulatta',   'genus' => 'Macaca')
+        publisher.publish('name' => 'Sumatran orangutan',     'species' => 'Pongo abelii',     'genus' => 'Pongo')
         sleep(0.1) # allow time for delivery
         queue_sizes = @queues.map { |q| q.status.first }
         queue_sizes.should == [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 2]
@@ -122,7 +121,39 @@ describe Autobahn do
     end
 
     context 'with batched messages' do
-      it 'uses the provided batch strategy to send multiple messages per together'
+      before do
+        @encoder = Autobahn::JsonEncoder.new
+        @batch_size = 3
+        @batch_timeout = 1
+        options = {
+          :encoder => @encoder,
+          :batch => Autobahn::BatchOptions.new(:size => @batch_size, :timeout => @batch_timeout)
+        }
+        @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+        @publisher = @batching_transport_system.publisher
+      end
+
+      after do
+        @batching_transport_system.disconnect! if @batching_transport_system
+      end
+
+      it 'it packs messages into batches' do
+        @publisher.publish('hello' => 'world')
+        @publisher.publish('foo' => 'bar')
+        @publisher.publish('abc' => '123')
+        @publisher.publish('xyz' => '999')
+        sleep(0.1) # allow time for delivery
+        message = @queues.map { |q| h, m = q.get; m }.compact.first
+        @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}, {'abc' => '123'}]
+      end
+
+      it 'sends a batch after a timeout, even if it is not full' do
+        @publisher.publish('hello' => 'world')
+        @publisher.publish('foo' => 'bar')
+        sleep(@batch_timeout + 0.5)
+        message = @queues.map { |q| h, m = q.get; m }.compact.first
+        @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}]
+      end
     end
   end
 
@@ -246,7 +277,7 @@ describe Autobahn do
         @batch_size = messages.size/2
         options = {
           :encoder => @encoder,
-          :batcher => Autobahn::Batcher.new(:size => @batch_size, :timeout => 2)
+          :batch => Autobahn::BatchOptions.new(:size => @batch_size, :timeout => 2)
         }
         @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
         messages.each_slice(@batch_size) { |batch| @exchange.publish(@encoder.encode(batch), :routing_key => routing_keys.sample) }
@@ -284,9 +315,9 @@ describe Autobahn do
 
   describe 'Transporting data through a transport system' do
     it 'transports messages from publisher to consumer' do
+      publisher = @transport_system.publisher
+      consumer = @transport_system.consumer
       begin
-        publisher = @transport_system.publisher
-        consumer = @transport_system.consumer
         messages = 200.times.map { |i| "foo#{i}" }
         recv_messages = []
         counting_down(messages.size) do |latch|
@@ -305,8 +336,8 @@ describe Autobahn do
     end
 
     it 'uses the provided encoder to pack and unpack objects' do
+      transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
       begin
-        transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
         publisher = transport_system.publisher
         consumer = transport_system.consumer
         messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
@@ -325,6 +356,25 @@ describe Autobahn do
       end
     end
 
-    it 'uses the provided batch builder to bundle up objects together for transport'
+    it 'transports messages in batches when configured to do so' do
+      transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new, :batch => Autobahn::BatchOptions.new(:size => 10, :timeout => 1))
+      begin
+        publisher = transport_system.publisher
+        consumer = transport_system.consumer
+        messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
+        recv_messages = []
+        counting_down(messages.size) do |latch|
+          consumer.subscribe do |headers, message|
+            recv_messages << message
+            headers.ack
+            latch.count_down
+          end
+          messages.each { |msg| publisher.publish(msg) }
+        end
+        recv_messages.sort_by { |m| m['foo'] }.should == messages.sort_by { |m| m['foo'] }
+      ensure
+        transport_system.disconnect! if transport_system
+      end
+    end
   end
 end
