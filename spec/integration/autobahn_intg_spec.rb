@@ -375,9 +375,9 @@ describe Autobahn do
     it 'transports messages from publisher to consumer' do
       publisher = @transport_system.publisher
       consumer = @transport_system.consumer
+      messages = 200.times.map { |i| "foo#{i}" }
+      recv_messages = []
       begin
-        messages = 200.times.map { |i| "foo#{i}" }
-        recv_messages = []
         counting_down(messages.size) do |latch|
           consumer.subscribe do |headers, message|
             recv_messages << message
@@ -393,13 +393,13 @@ describe Autobahn do
       end
     end
 
-    it 'transports messages encoded' do
-      transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+    def transport_messages!(options)
+      transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+      publisher = transport_system.publisher
+      consumer = transport_system.consumer
+      messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
+      recv_messages = []
       begin
-        publisher = transport_system.publisher
-        consumer = transport_system.consumer
-        messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
-        recv_messages = []
         counting_down(messages.size) do |latch|
           consumer.subscribe do |headers, message|
             recv_messages << message
@@ -414,25 +414,22 @@ describe Autobahn do
       end
     end
 
+    it 'transports messages encoded' do
+      transport_messages!(:encoder => Autobahn::JsonEncoder.new)
+    end
+
     it 'transports messages in batches' do
-      transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new, :batch => {:size => 10, :timeout => 1})
-      begin
-        publisher = transport_system.publisher
-        consumer = transport_system.consumer
-        messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
-        recv_messages = []
-        counting_down(messages.size) do |latch|
-          consumer.subscribe do |headers, message|
-            recv_messages << message
-            headers.ack
-            latch.count_down
-          end
-          messages.each { |msg| publisher.publish(msg) }
-        end
-        recv_messages.sort_by { |m| m['foo'] }.should == messages.sort_by { |m| m['foo'] }
-      ensure
-        transport_system.disconnect! if transport_system
-      end
+      transport_messages!(
+        :encoder => Autobahn::JsonEncoder.new,
+        :batch => {:size => 10, :timeout => 1}
+      )
+    end
+
+    it 'transports messages compressed' do
+      transport_messages!(
+        :encoder => Autobahn::GzipEncoder.new(Autobahn::JsonEncoder.new),
+        :batch => {:size => 10, :timeout => 1}
+      )
     end
   end
 end
