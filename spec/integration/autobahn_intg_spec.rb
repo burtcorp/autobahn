@@ -207,6 +207,7 @@ describe Autobahn do
         messages.each_with_index do |msg, i|
           @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
         end
+        sleep(0.1) # allow time for delivery
       end
 
       it 'delivers all available messages to the subscriber' do
@@ -268,8 +269,8 @@ describe Autobahn do
         messages.each_with_index do |msg, i|
           @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
         end
+        sleep(0.1) # allow time for delivery
       end
-
 
       it 'exposes a raw interface for fetching the next message off of the local buffer' do
         messages = []
@@ -297,6 +298,7 @@ describe Autobahn do
 
       it 'uses the provided encoder to decode messages' do
         @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample)
+        sleep(0.1) # allow time for delivery
         consumer = @encoded_transport_system.consumer
         h, m = consumer.next
         m.should == {'hello' => 'world'}
