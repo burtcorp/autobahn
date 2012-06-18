@@ -30,7 +30,7 @@ module Autobahn
 
       let :encoder do
         double(:encoder).tap do |e|
-          e.stub(:content_type).and_return('application/x-nonsense')
+          e.stub(:properties).and_return(:content_type => 'application/x-nonsense')
           e.stub(:encode).and_return(nil)
         end
       end
