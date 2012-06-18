@@ -55,11 +55,12 @@ module Autobahn
       if @batch_options[:timeout] && @batch_options[:timeout] > 0
         @scheduler = Concurrency::Executors.new_single_thread_scheduled_executor(Concurrency::NamingDaemonThreadFactory.new('batch_drainer'))
         @drainer_task = @scheduler.schedule_with_fixed_delay(
-          method(:force_drain).to_proc, 
+          method(:maybe_force_drain).to_proc, 
           @batch_options[:timeout], 
           @batch_options[:timeout], 
           Concurrency::TimeUnit::SECONDS
         )
+        @last_drain = Time.now
       end
       self
     end
@@ -101,9 +102,11 @@ module Autobahn
         end
       end
       @publisher.publish(batch)
+      @last_drain = Time.now
     end
 
-    def force_drain
+    def maybe_force_drain
+      return if (Time.now - @last_drain) < @batch_options[:timeout]
       drain
       drain_batch
     end

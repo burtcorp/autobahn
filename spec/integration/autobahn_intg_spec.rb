@@ -150,7 +150,7 @@ describe Autobahn do
       it 'sends a batch after a timeout, even if it is not full' do
         @publisher.publish('hello' => 'world')
         @publisher.publish('foo' => 'bar')
-        sleep(@batch_timeout + 0.5)
+        sleep(@batch_timeout * 2)
         message = @queues.map { |q| h, m = q.get; m }.compact.first
         @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}]
       end
