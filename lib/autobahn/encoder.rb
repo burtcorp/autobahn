@@ -2,10 +2,10 @@
 
 module Autobahn
   class StringEncoder
-    CONTENT_TYPE = 'application/octet-stream'.freeze
+    PROPERTIES = {:content_type => 'application/octet-stream'.freeze}.freeze
 
-    def content_type
-      CONTENT_TYPE
+    def properties
+      PROPERTIES
     end
 
     def encodes_batches?
@@ -25,11 +25,11 @@ module Autobahn
     require 'json'
   
     class JsonEncoder
-      CONTENT_TYPE = 'application/json'.freeze
+      PROPERTIES = {:content_type => 'application/json'.freeze}.freeze
 
-    def content_type
-      CONTENT_TYPE
-    end
+      def properties
+        PROPERTIES
+      end
 
       def encodes_batches?
         true
@@ -50,10 +50,10 @@ module Autobahn
     require 'msgpack'
 
     class MsgPackEncoder
-      CONTENT_TYPE = 'application/msgpack'.freeze
+      PROPERTIES = {:content_type => 'application/msgpack'.freeze}.freeze
 
-      def content_type
-        CONTENT_TYPE
+      def properties
+        PROPERTIES
       end
 
       def encodes_batches?
@@ -65,7 +65,7 @@ module Autobahn
       end
 
       def decode(str)
-        MessagePack.unpack(str.force_encoding(Encoding::ASCII_8BIT))
+        MessagePack.unpack(str.force_encoding(Encoding::BINARY))
       end
     end
   rescue LoadError
@@ -75,7 +75,7 @@ module Autobahn
     require 'bson'
 
     class BsonEncoder
-      CONTENT_TYPE = 'application/bson'.freeze
+      PROPERTIES = {:content_type => 'application/bson'.freeze}.freeze
 
       def content_type
         CONTENT_TYPE
@@ -94,5 +94,44 @@ module Autobahn
       end
     end
   rescue LoadError
+  end
+
+  begin
+    require 'zlib'
+    require 'stringio'
+
+    class GzipEncoder
+      CONTENT_ENCODING = 'gzip'.freeze
+
+      def initialize(decorated_encoder)
+        @decorated_encoder = decorated_encoder
+      end
+
+      def properties
+        @properties ||= begin
+          p = @decorated_encoder.properties.dup
+          p[:content_encoding] = CONTENT_ENCODING
+          p
+        end
+      end
+
+      def encodes_batches?
+        @decorated_encoder.encodes_batches?
+      end
+
+      def encode(obj)
+        io = StringIO.new
+        gz = Zlib::GzipWriter.new(io)
+        gz.print(@decorated_encoder.encode(obj))
+        gz.close
+        io.string
+      end
+
+      def decode(str)
+        io = StringIO.new(str)
+        gz = Zlib::GzipReader.new(io)
+        @decorated_encoder.decode(gz.read).tap { gz.close }
+      end
+    end
   end
 end

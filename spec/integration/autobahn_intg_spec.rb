@@ -92,16 +92,48 @@ describe Autobahn do
     end
 
     context 'with encoded messages' do
+      before do
+        @encoded_transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+      end
+
+      after do
+        @encoded_transport_system.disconnect! if @encoded_transport_system
+      end
+
       it 'uses the provided encoder to encode messages' do
-        begin
-          transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
-          publisher = transport_system.publisher
-          publisher.publish({'hello' => 'world'})
-          sleep(0.1) # allow time for delivery
-          @queues.map { |q| h, m = q.get; m }.compact.first.should == '{"hello":"world"}'
-        ensure
-          transport_system.disconnect! if transport_system
-        end
+        publisher = @encoded_transport_system.publisher
+        publisher.publish({'hello' => 'world'})
+        sleep(0.1) # allow time for delivery
+        @queues.map { |q| h, m = q.get; m }.compact.first.should == '{"hello":"world"}'
+      end
+    end
+
+    context 'with compressed messages' do
+      before do
+        encoder = Autobahn::GzipEncoder.new(Autobahn::JsonEncoder.new)
+        options = {:encoder => encoder}
+        @compressed_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+        publisher = @compressed_transport_system.publisher
+        publisher.publish({'hello' => 'world'})
+        sleep(0.1) # allow time for delivery
+      end
+
+      after do
+        @compressed_transport_system.disconnect! if @compressed_transport_system
+      end
+
+      it 'uses the provided encoder to also compress messages' do
+        compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
+        actual_message = @queues.map { |q| h, m = q.get; m }.compact.first
+        actual_message.should == compressed_message
+      end
+
+      it 'sets the content-encoding header' do
+        @queues.map { |q| h, m = q.get; h.properties.content_encoding if h }.compact.first.should == 'gzip'
+      end
+
+      it 'sets the content-type header' do
+        @queues.map { |q| h, m = q.get; h.properties.content_type if h }.compact.first.should == 'application/json'
       end
     end
 
@@ -267,6 +299,26 @@ describe Autobahn do
         @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample)
         consumer = @encoded_transport_system.consumer
         h, m = consumer.next
+        m.should == {'hello' => 'world'}
+      end
+    end
+
+    context 'with compressed messages' do
+      before do
+        options = {:encoder => Autobahn::GzipEncoder.new(Autobahn::JsonEncoder.new)}
+        @compressed_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+        compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
+        @exchange.publish(compressed_message, :routing_key => routing_keys.sample)
+        sleep(0.1) # allow time for delivery
+      end
+
+      after do
+        @compressed_transport_system.disconnect! if @compressed_transport_system
+      end
+
+      it 'uses the provided encoder to decode messages' do
+        consumer = @compressed_transport_system.consumer
+        h, m = consumer.next(5)
         m.should == {'hello' => 'world'}
       end
     end

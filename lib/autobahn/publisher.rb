@@ -14,7 +14,7 @@ module Autobahn
       rk = @strategy.select_routing_key(routing_keys, message)
       ex = exchanges_by_routing_key[rk]
       em = @encoder.encode(message)
-      op = {:routing_key => rk, :properties => {:content_type => @encoder.content_type}}
+      op = {:routing_key => rk, :properties => @encoder.properties}
       ex.publish(em, op)
     end
 
