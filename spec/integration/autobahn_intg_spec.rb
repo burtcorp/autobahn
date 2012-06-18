@@ -22,6 +22,10 @@ describe Autobahn do
     latch.should_not time_out.within(options[:timeout])
   end
 
+  def await_delivery
+    sleep(0.1)
+  end
+
   before :all do
     begin
       num_nodes.times do |i|
@@ -77,14 +81,14 @@ describe Autobahn do
 
       it 'publishes a message' do
         @publisher.publish('hello world')
-        sleep(0.1) # allow time for for delivery
+        await_delivery
         message_count = @queues.reduce(0) { |n, q| n + q.status.first }
         message_count.should == 1
       end
 
       it 'publishes messages to random routing keys' do
         200.times { |i| @publisher.publish("hello world #{i}") }
-        sleep(0.1) # allow time for for delivery
+        await_delivery
         message_counts = @queues.map { |q| q.status.first }
         message_counts.reduce(:+).should == 200
         message_counts.each { |c| c.should_not == 0 }
@@ -103,7 +107,7 @@ describe Autobahn do
       it 'uses the provided encoder to encode messages' do
         publisher = @encoded_transport_system.publisher
         publisher.publish({'hello' => 'world'})
-        sleep(0.1) # allow time for delivery
+        await_delivery
         @queues.map { |q| h, m = q.get; m }.compact.first.should == '{"hello":"world"}'
       end
     end
@@ -115,7 +119,7 @@ describe Autobahn do
         @compressed_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
         publisher = @compressed_transport_system.publisher
         publisher.publish({'hello' => 'world'})
-        sleep(0.1) # allow time for delivery
+        await_delivery
       end
 
       after do
@@ -146,7 +150,7 @@ describe Autobahn do
         publisher.publish('name' => 'Common squirrel monkey', 'species' => 'Saimiri sciureus', 'genus' => 'Saimiri')
         publisher.publish('name' => 'Rhesus macaque',         'species' => 'Macaca mulatta',   'genus' => 'Macaca')
         publisher.publish('name' => 'Sumatran orangutan',     'species' => 'Pongo abelii',     'genus' => 'Pongo')
-        sleep(0.1) # allow time for delivery
+        await_delivery
         queue_sizes = @queues.map { |q| q.status.first }
         queue_sizes.should == [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 2]
       end
@@ -174,7 +178,7 @@ describe Autobahn do
         @publisher.publish('foo' => 'bar')
         @publisher.publish('abc' => '123')
         @publisher.publish('xyz' => '999')
-        sleep(0.1) # allow time for delivery
+        await_delivery
         message = @queues.map { |q| h, m = q.get; m }.compact.first
         @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}, {'abc' => '123'}]
       end
@@ -207,7 +211,7 @@ describe Autobahn do
         messages.each_with_index do |msg, i|
           @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
         end
-        sleep(0.1) # allow time for delivery
+        await_delivery
       end
 
       it 'delivers all available messages to the subscriber' do
@@ -259,7 +263,7 @@ describe Autobahn do
         end
         @consumer.unsubscribe!
         @exchange.publish('foo', :routing_key => routing_keys.sample)
-        sleep(0.1) # allow time for delivery
+        await_delivery
         @queues.map { |q| q.status.first }.reduce(:+).should == 1
       end
     end
@@ -269,7 +273,7 @@ describe Autobahn do
         messages.each_with_index do |msg, i|
           @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
         end
-        sleep(0.1) # allow time for delivery
+        await_delivery
       end
 
       it 'exposes a raw interface for fetching the next message off of the local buffer' do
@@ -298,7 +302,7 @@ describe Autobahn do
 
       it 'uses the provided encoder to decode messages' do
         @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample)
-        sleep(0.1) # allow time for delivery
+        await_delivery
         consumer = @encoded_transport_system.consumer
         h, m = consumer.next
         m.should == {'hello' => 'world'}
@@ -311,7 +315,7 @@ describe Autobahn do
         @compressed_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
         compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
         @exchange.publish(compressed_message, :routing_key => routing_keys.sample)
-        sleep(0.1) # allow time for delivery
+        await_delivery
       end
 
       after do
