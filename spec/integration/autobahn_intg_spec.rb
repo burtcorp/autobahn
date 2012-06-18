@@ -393,7 +393,7 @@ describe Autobahn do
       end
     end
 
-    it 'uses the provided encoder to pack and unpack objects' do
+    it 'transports messages encoded' do
       transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
       begin
         publisher = transport_system.publisher
@@ -414,7 +414,7 @@ describe Autobahn do
       end
     end
 
-    it 'transports messages in batches when configured to do so' do
+    it 'transports messages in batches' do
       transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new, :batch => {:size => 10, :timeout => 1})
       begin
         publisher = transport_system.publisher
