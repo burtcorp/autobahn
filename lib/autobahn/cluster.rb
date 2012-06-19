@@ -41,7 +41,7 @@ module Autobahn
   class Cluster
     include RestClient
 
-    entity :nodes
+    entity :node
     entity :channel
     entity :exchange
     entity :queue

@@ -432,4 +432,50 @@ describe Autobahn do
       )
     end
   end
+
+  describe 'Creating a transport system' do
+    context 'when inquiring about existence' do
+      it 'can tell that a transport system exists' do
+        ts = Autobahn.transport_system(api_uri, exchange_name)
+        ts.exists?.should be_true
+      end
+
+      it 'can tell that a transport system does not exist' do
+        ts = Autobahn.transport_system(api_uri, 'bogus_name')
+        ts.exists?.should be_false
+      end
+    end
+
+    context 'when creating a transport system' do
+      before do
+        @stuff_ts = Autobahn.transport_system(api_uri, 'stuff')
+        @stuff_ts.create!
+      end
+
+      after do
+        @stuff_ts.disconnect!
+        @connection.create_channel.exchange_delete('stuff') rescue nil
+        @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }.each { |q| @connection.create_channel.queue_delete(q['name']) rescue nil }
+      end
+
+      it 'creates the exchange' do
+        @stuff_ts.cluster.exchanges.find { |e| e['name'] == 'stuff' }.should_not be_nil
+      end
+
+      it 'creates the queues' do
+        @stuff_ts.cluster.queues.map { |q| q['name'] }.select { |n| n.start_with?('stuff_') }.should == %w[stuff_00 stuff_01 stuff_02 stuff_03]
+      end
+
+      it 'binds the queues to the exchange' do
+        bindings = @stuff_ts.cluster.bindings.select { |b| b['source'] == 'stuff' && b['destination_type'] == 'queue' && b['destination'].start_with?('stuff_') }
+        binding_mappings = Hash[bindings.map { |b| [b['routing_key'], b['destination']] }]
+        binding_mappings.should == {'stuff_00' => 'stuff_00', 'stuff_01' => 'stuff_01', 'stuff_02' => 'stuff_02', 'stuff_03' => 'stuff_03'}
+      end
+
+      it 'distributes the queues evenly over the nodes' do
+        queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }
+        queues.group_by { |q| q['node'] }.map { |g, qs| qs.size }.should == [1, 1, 1, 1]
+      end
+    end
+  end
 end

@@ -17,6 +17,23 @@ module Autobahn
       @publishers = []
     end
 
+    def exists?
+      setup!
+      @routing.keys.any?
+    end
+
+    def create!(options={})
+      return if exists?
+      connect!
+      connections = @connections.sort.map(&:last)
+      exchange = connections.sample.create_channel.exchange(@exchange_name, :type => :direct)
+      connections.size.times do |i|
+        queue_name = "#{@exchange_name}_#{i.to_s.rjust(2, '0')}"
+        queue = connections[i].create_channel.queue(queue_name)
+        queue.bind(exchange, :routing_key => queue_name)
+      end
+    end
+
     def consumer(options={})
       setup!
       connect!
@@ -70,6 +87,9 @@ module Autobahn
     def connect!
       return if defined? @connections
       nodes = @routing.values.map { |q| q[:node] }.uniq
+      if nodes.empty?
+        nodes = @cluster.nodes.map { |n| n['name'] }
+      end
       @connections = nodes.reduce({}) do |acc, node|
         acc[node] = HotBunnies.connect(connection_configuration(node))
         acc
