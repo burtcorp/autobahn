@@ -211,7 +211,6 @@ describe Autobahn do
         messages.each_with_index do |msg, i|
           @exchange.publish(msg, :routing_key => routing_keys[i % num_queues])
         end
-        await_delivery
       end
 
       it 'delivers all available messages to the subscriber' do
