@@ -5,6 +5,10 @@ require 'zlib'
 
 module Autobahn
   class RandomPublisherStrategy
+    def introspective?
+      false
+    end
+
     def select_routing_key(routing_keys, message)
       routing_keys.sample
     end
@@ -14,6 +18,10 @@ module Autobahn
     def initialize(property, options={})
       @property = property
       @hash = options[:hash]
+    end
+
+    def introspective?
+      true
     end
 
     def select_routing_key(routing_keys, message)

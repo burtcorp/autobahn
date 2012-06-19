@@ -10,12 +10,21 @@ module Autobahn
       @strategy = options[:strategy] || RandomPublisherStrategy.new
     end
 
-    def publish(message)
-      rk = @strategy.select_routing_key(routing_keys, message)
+    def publish(message, options={})
+      rk = options[:routing_key] || select_routing_key(message)
       ex = exchanges_by_routing_key[rk]
       em = @encoder.encode(message)
       op = {:routing_key => rk, :properties => @encoder.properties}
       ex.publish(em, op)
+    end
+
+    # only for internal use
+    def select_routing_key(message)
+      @strategy.select_routing_key(routing_keys, message)
+    end
+
+    def introspective_routing?
+      @strategy.introspective?
     end
 
     def disconnect!
@@ -47,8 +56,7 @@ module Autobahn
     def initialize(publisher, batch_options)
       @publisher = publisher
       @batch_options = batch_options
-      @buffer = Concurrency::LinkedBlockingDeque.new
-      @buffer_size = Concurrency::AtomicInteger.new
+      @buffers = Hash.new { |h, k| h[k] = Concurrency::LinkedBlockingDeque.new }
     end
 
     def start!
@@ -66,8 +74,12 @@ module Autobahn
     end
 
     def publish(message)
-      @buffer.add_last(message)
-      @buffer_size.increment_and_get
+      if @publisher.introspective_routing?
+        rk = @publisher.select_routing_key(message)
+      else
+        rk = nil
+      end
+      @buffers[rk].add_last(message)
       drain
     end
 
@@ -83,32 +95,30 @@ module Autobahn
       @batch_options[:size] || 1
     end
 
-    def drain
-      while @buffer_size.get >= batch_size
-        # TODO: this block can be entered by two threads simultaneously since the 
-        #       count will remain high until a bit further down, on the other hand
-        #       the worst case result is batches with too few messages
-        drain_batch
+    def drain(force=false)
+      @buffers.each do |rk, buffer|
+        while (buffer.size >= batch_size) || (buffer.size > 0 && force)
+          # TODO: this block can be entered by two threads simultaneously since the 
+          #       count will remain high until a bit further down, on the other hand
+          #       the worst case result is batches with too few messages
+          drain_batch(rk, buffer)
+        end
       end
     end
 
-    def drain_batch
+    def drain_batch(rk, buffer)
       batch = []
       batch_size.times do
-        msg = @buffer.poll_first
-        if msg
-          batch << msg 
-          @buffer_size.decrement_and_get
-        end
+        msg = buffer.poll_first
+        batch << msg if msg
       end
-      @publisher.publish(batch)
+      @publisher.publish(batch, :routing_key => rk)
       @last_drain = Time.now
     end
 
     def maybe_force_drain
       return if (Time.now - @last_drain) < @batch_options[:timeout]
-      drain
-      drain_batch
+      drain(true)
     end
   end
 end

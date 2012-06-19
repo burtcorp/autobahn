@@ -190,6 +190,15 @@ describe Autobahn do
         message = @queues.map { |q| h, m = q.get; m }.compact.first
         @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}]
       end
+
+      it 'respects routing when sending batches' do
+        publisher = @batching_transport_system.publisher(:strategy => Autobahn::PropertyGroupingPublisherStrategy.new('id', :hash => :crc32))
+        ('A'..'Z').each do |id|
+          publisher.publish('id' => id)
+        end
+        h1, m1 = @queues[11].get
+        @encoder.decode(m1).should == [{'id' => 'A'}, {'id' => 'C'}, {'id' => 'H'}]
+      end
     end
   end
 
