@@ -477,5 +477,66 @@ describe Autobahn do
         queues.group_by { |q| q['node'] }.map { |g, qs| qs.size }.should == [1, 1, 1, 1]
       end
     end
+
+    context 'when creating a transport system with options' do
+      before do
+        @stuff_ts = Autobahn.transport_system(api_uri, 'stuff')
+        @stuff_ts.create!(
+          :queues_per_node => 2, 
+          :routing_keys_per_queue => 4,
+          :queue_prefix => 'xyz',
+          :routing_key_prefix => 'blipp_'
+        )
+      end
+
+      after do
+        @stuff_ts.disconnect!
+        @connection.create_channel.exchange_delete('stuff') rescue nil
+        @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }.each { |q| @connection.create_channel.queue_delete(q['name']) rescue nil }
+      end
+
+      it 'creates queues with names with the specified prefix' do
+        @stuff_ts.cluster.queues.map { |q| q['name'] }.select { |n| n.start_with?('xyz') }.should == %w[xyz00 xyz01 xyz02 xyz03 xyz04 xyz05 xyz06 xyz07]
+      end
+
+      it 'creates the specified number of queues per node' do
+        queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }
+        queues.group_by { |q| q['node'] }.map { |g, qs| qs.size }.should == [2, 2, 2, 2]
+      end
+
+      it 'binds the queues using routing keys with the specified prefix' do
+        bindings = @stuff_ts.cluster.bindings.select { |b| b['source'] == 'stuff' && b['destination_type'] == 'queue' && b['destination'].start_with?('xyz') }
+        binding_mappings = Hash[bindings.map { |b| [b['routing_key'], b['destination']] }]
+        binding_mappings.should == {
+          'blipp_00' => 'xyz00', 'blipp_01' => 'xyz00', 'blipp_02' => 'xyz00', 'blipp_03' => 'xyz00',
+          'blipp_04' => 'xyz01', 'blipp_05' => 'xyz01', 'blipp_06' => 'xyz01', 'blipp_07' => 'xyz01',
+          'blipp_08' => 'xyz02', 'blipp_09' => 'xyz02', 'blipp_10' => 'xyz02', 'blipp_11' => 'xyz02',
+          'blipp_12' => 'xyz03', 'blipp_13' => 'xyz03', 'blipp_14' => 'xyz03', 'blipp_15' => 'xyz03',
+          'blipp_16' => 'xyz04', 'blipp_17' => 'xyz04', 'blipp_18' => 'xyz04', 'blipp_19' => 'xyz04',
+          'blipp_20' => 'xyz05', 'blipp_21' => 'xyz05', 'blipp_22' => 'xyz05', 'blipp_23' => 'xyz05',
+          'blipp_24' => 'xyz06', 'blipp_25' => 'xyz06', 'blipp_26' => 'xyz06', 'blipp_27' => 'xyz06',
+          'blipp_28' => 'xyz07', 'blipp_29' => 'xyz07', 'blipp_30' => 'xyz07', 'blipp_31' => 'xyz07',
+        }
+      end
+
+      it 'zero fills with enough zeroes' do
+        ts = Autobahn.transport_system(api_uri, 'more_stuff')
+        ts.create!(:queues_per_node => 40)
+        begin
+          queue_names = ts.cluster.queues.map { |q| q['name'] }.select { |n| n.start_with?('more_stuff_') }
+          rk_names = ts.cluster.bindings.map { |q| q['routing_key'] }.select { |n| n.start_with?('more_stuff_') }
+          queue_names.should include('more_stuff_000')
+          queue_names.should include('more_stuff_099')
+          queue_names.should include('more_stuff_101')
+          rk_names.should include('more_stuff_001')
+          rk_names.should include('more_stuff_088')
+          rk_names.should include('more_stuff_159')
+        ensure
+          ts.disconnect!
+          @connection.create_channel.exchange_delete('more_stuff') rescue nil
+          ts.cluster.queues.select { |q| q['name'].start_with?('more_stuff_') }.each { |q| @connection.create_channel.queue_delete(q['name']) rescue nil }
+        end
+      end
+    end
   end
 end

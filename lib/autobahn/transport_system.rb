@@ -26,11 +26,26 @@ module Autobahn
       return if exists?
       connect!
       connections = @connections.sort.map(&:last)
+      queues_per_node = options[:queues_per_node] || 1
+      rks_per_queue = options[:routing_keys_per_queue] || 1
+      queue_prefix = options[:queue_prefix] || "#{@exchange_name}_"
+      rk_prefix = options[:routing_key_prefix] || queue_prefix
+      queue_suffix_width = [Math.log10(connections.size * queues_per_node).ceil, 2].max
+      rk_suffix_width = [Math.log10(connections.size * queues_per_node * rks_per_queue).ceil, 2].max
       exchange = connections.sample.create_channel.exchange(@exchange_name, :type => :direct)
-      connections.size.times do |i|
-        queue_name = "#{@exchange_name}_#{i.to_s.rjust(2, '0')}"
-        queue = connections[i].create_channel.queue(queue_name)
-        queue.bind(exchange, :routing_key => queue_name)
+      connections.size.times do |node_index|
+        connection = connections[node_index]
+        channel = connection.create_channel
+        queues_per_node.times do |queue_offset|
+          queue_index = node_index * queues_per_node + queue_offset
+          queue_name = "#{queue_prefix}#{queue_index.to_s.rjust(queue_suffix_width, '0')}"
+          queue = channel.queue(queue_name)
+          rks_per_queue.times do |rk_offset|
+            rk_index = queue_index * rks_per_queue + rk_offset
+            rk_name = "#{rk_prefix}#{rk_index.to_s.rjust(rk_suffix_width, '0')}"
+            queue.bind(exchange, :routing_key => rk_name)
+          end
+        end
       end
     end
 
