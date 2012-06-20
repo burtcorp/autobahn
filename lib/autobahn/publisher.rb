@@ -83,6 +83,10 @@ module Autobahn
       drain
     end
 
+    def flush!
+      drain(true)
+    end
+
     def disconnect!
       @drainer_task.cancel(false) if @drainer_task
       @scheduler.shutdown if @scheduler

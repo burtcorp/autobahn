@@ -199,6 +199,14 @@ describe Autobahn do
         h1, m1 = @queues[11].get
         @encoder.decode(m1).should == [{'id' => 'A'}, {'id' => 'C'}, {'id' => 'H'}]
       end
+
+      it 'can flush batches on demand' do
+        @publisher.publish('hello' => 'world')
+        @publisher.publish('foo' => 'bar')
+        @publisher.flush!
+        message = @queues.map { |q| h, m = q.get; m }.compact.first
+        @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}]
+      end
     end
   end
 
