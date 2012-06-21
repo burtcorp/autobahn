@@ -7,12 +7,15 @@ module Autobahn
   module Concurrency
     import 'java.lang.Thread'
     import 'java.util.concurrent.atomic.AtomicInteger'
+    import 'java.util.concurrent.atomic.AtomicBoolean'
     import 'java.util.concurrent.ThreadFactory'
     import 'java.util.concurrent.Executors'
     import 'java.util.concurrent.LinkedBlockingQueue'
     import 'java.util.concurrent.LinkedBlockingDeque'
+    import 'java.util.concurrent.ArrayBlockingQueue'
     import 'java.util.concurrent.TimeUnit'
     import 'java.util.concurrent.CountDownLatch'
+    import 'java.util.concurrent.locks.ReentrantLock'
 
     class NamingDaemonThreadFactory
       include ThreadFactory
@@ -31,6 +34,19 @@ module Autobahn
         t.daemon = true
         t.name = "#@base_name-#{self.class.next_id}"
         t
+      end
+    end
+
+    class Lock
+      def initialize
+        @lock = ReentrantLock.new
+      end
+
+      def lock
+        @lock.lock
+        yield
+      ensure
+        @lock.unlock
       end
     end
   end

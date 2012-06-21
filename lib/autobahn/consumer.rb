@@ -6,40 +6,30 @@ module Autobahn
       @routing = routing
       @connections = connections
       @encoder = encoder
-      @options = options
+      @prefetch = options[:prefetch]
+      @buffer_size = options[:buffer_size]
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
-      @extra_workers = 0
-      @subscribed = false
-      @running = false
-    end
-
-    def setup!
-      return if @subscribed
-      subscriptions.each do |subscription|
-        subscription.each(:blocking => false, :executor => worker_pool) do |headers, encoded_message|
-          message = @encoder.decode(encoded_message)
-          internal_queue.put([headers, message])
-        end
-      end
-      @running = true
-      @subscribed = true
+      @running = Concurrency::AtomicBoolean.new(false)
+      @subscribed = Concurrency::AtomicBoolean.new(false)
+      @setup_lock = Concurrency::Lock.new
     end
 
     def subscribe(options={}, &handler)
-      raise 'Already subscribed!' if @subscribed
-      mode = options[:mode] || :async
-      # TODO: this is a bit ugly, and is only here to support batching, 
-      #       this class shouldn't have to worry about that!
-      consumer = options[:consumer] || self 
-      timeout = options[:timeout] || 1
-      case mode
-      when :async
-        @extra_workers += 1
-        worker_pool.execute { deliver(consumer, handler, timeout) }
-      when :blocking
-        deliver(consumer, handler, timeout)
-      else
-        raise ArgumentError, "Not a valid subscription mode: #{mode}"
+      if @running.compare_and_set(false, true)
+        setup!
+        mode = options[:mode] || :async
+        # TODO: this is a bit ugly, and is only here to support batching, 
+        #       this class shouldn't have to worry about that!
+        consumer = options[:consumer] || self 
+        timeout = options[:timeout] || 1
+        case mode
+        when :async
+          @worker_pool.execute { deliver(consumer, handler, timeout) }
+        when :blocking
+          deliver(consumer, handler, timeout)
+        else
+          raise ArgumentError, "Not a valid subscription mode: #{mode}"
+        end
       end
       nil
     end
@@ -47,9 +37,9 @@ module Autobahn
     def next(timeout=nil)
       setup!
       if timeout
-        internal_queue.poll((timeout * 1000).to_i, Concurrency::TimeUnit::MILLISECONDS)
+        @internal_queue.poll((timeout * 1000).to_i, Concurrency::TimeUnit::MILLISECONDS)
       else
-        internal_queue.take
+        @internal_queue.take
       end
     end
 
@@ -62,59 +52,63 @@ module Autobahn
     end
 
     def unsubscribe!
-      return unless @subscribed
-      @subscriptions.each(&:cancel)
-      @subscriptions = nil
-      @subscribed = false
+      @setup_lock.lock do
+        if @subscribed.compare_and_set(true, false)
+          @subscriptions.each(&:cancel)
+          @subscriptions = nil
+          @queues.map(&:channel).each(&:close)
+          @queues = nil
+          @worker_pool.shutdown
+          @worker_pool = nil
+          # TODO: should we await pool termination here?
+          @running.set(false)
+        end
+      end
     end
 
     def disconnect!
-      return unless @running
-      @running = false
       unsubscribe!
-      if @queues
-        @queues.map(&:channel).each(&:close)
-        @queues = nil
-      end
-      if @worker_pool
-        @worker_pool.shutdown
-        unless @worker_pool.await_termination(5, Concurrency::TimeUnit::SECONDS)
-          # TODO: log an error
-        end
-        @worker_pool = nil
-      end
     end
 
     private
+
+    def setup!
+      @setup_lock.lock do
+        if @subscribed.compare_and_set(false, true)
+          @queues = create_queues
+          @worker_pool = create_thread_pool
+          @internal_queue = create_internal_queue
+          @subscriptions = create_subscriptions
+          @subscriptions.each do |subscription|
+            subscription.each(:blocking => false, :executor => @worker_pool) do |headers, encoded_message|
+              message = @encoder.decode(encoded_message)
+              @internal_queue.put([headers, message])
+            end
+          end
+        end
+      end
+    end
 
     def deliver(consumer, handler, timeout)
       begin
         headers, message = consumer.next(timeout)
         handler.call(headers, message) if headers
-      end while @running
-    end
-
-    def worker_pool
-      @worker_pool ||= create_thread_pool(queues.size + @extra_workers)
-    end
-
-    def subscriptions
-      @subscriptions ||= queues.map { |queue| queue.subscribe(:ack => true) }
+      end while @running.get
     end
 
     def channels_by_consumer_tag
-      @channels_by_consumer_tag ||= Hash[subscriptions.map { |s| [s.consumer_tag, s.channel] }]
+      @channels_by_consumer_tag ||= Hash[@subscriptions.map { |s| [s.consumer_tag, s.channel] }]
     end
 
-    def internal_queue
-      @internal_queue ||= Concurrency::LinkedBlockingQueue.new(@options[:buffer_size] || (2**31 - 1))
+    def create_subscriptions
+      @queues.map { |queue| queue.subscribe(:ack => true) }
     end
 
-    def queues
-      @queues ||= @routing.sort.each_with_index.map do |(queue_name, meta), i|
+    def create_queues
+      @routing.sort.each_with_index.map do |(queue_name, meta), i|
         if @strategy.subscribe?(i, @routing.size)
           channel = @connections[meta[:node]].create_channel
-          channel.prefetch = @options[:prefetch] if @options[:prefetch]
+          channel.prefetch = @prefetch if @prefetch
           channel.queue(queue_name, :passive => true)
         else
           nil
@@ -128,9 +122,17 @@ module Autobahn
       subscription
     end
 
-    def create_thread_pool(size)
+    def create_internal_queue
+      if @buffer_size || @prefetch
+        Concurrency::ArrayBlockingQueue.new(@buffer_size || (@prefetch * @queues.size))
+      else
+        Concurrency::LinkedBlockingQueue.new
+      end
+    end
+
+    def create_thread_pool
       thread_factory = Concurrency::NamingDaemonThreadFactory.new('autobahn')
-      Concurrency::Executors.new_fixed_thread_pool(size, thread_factory)
+      Concurrency::Executors.new_fixed_thread_pool(@queues.size + 1, thread_factory) # 1 extra for async subscribers
     end
   end
 
