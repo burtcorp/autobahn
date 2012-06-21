@@ -12,8 +12,8 @@ Gem::Specification.new do |s|
   s.authors     = ['The Burt Platform Team']
   s.email       = ['platform@burtcorp.com']
   s.homepage    = 'http://github.com/burtcorp/autobahn'
-  s.summary     = %q{}
-  s.description = %q{}
+  s.summary     = %q{Get the most out of RabbitMQ with the least amount of code}
+  s.description = %q{Autobahn is a transport system abstraction for HotBunnies/RabbitMQ that tries to maximize message throughput rates}
 
   s.rubyforge_project = 'autobahn'
   
