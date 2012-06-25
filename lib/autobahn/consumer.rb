@@ -159,10 +159,11 @@ module Autobahn
     end
 
     def next(timeout=nil)
-      headers, message = @buffer.poll
-      unless headers
-        headers, messages = @consumer.next(timeout)
-        if headers
+      pair = @buffer.poll
+      unless pair
+        pair = @consumer.next(timeout)
+        if pair
+          headers, messages = pair
           batch_headers = BatchHeaders.new(headers, messages.size)
           first_message = messages.shift
           messages.each do |message|
@@ -171,7 +172,7 @@ module Autobahn
           return batch_headers, first_message
         end
       end
-      return headers, message
+      return pair
     end
 
     def ack(consumer_tag, delivery_tag, options={})
