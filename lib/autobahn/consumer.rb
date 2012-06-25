@@ -9,27 +9,27 @@ module Autobahn
       @prefetch = options[:prefetch]
       @buffer_size = options[:buffer_size]
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
-      @running = Concurrency::AtomicBoolean.new(false)
+      @setup = Concurrency::AtomicBoolean.new(false)
+      @deliver = Concurrency::AtomicBoolean.new(false)
       @subscribed = Concurrency::AtomicBoolean.new(false)
       @setup_lock = Concurrency::Lock.new
     end
 
     def subscribe(options={}, &handler)
-      if @running.compare_and_set(false, true)
-        setup!
-        mode = options[:mode] || :async
-        # TODO: this is a bit ugly, and is only here to support batching, 
-        #       this class shouldn't have to worry about that!
-        consumer = options[:consumer] || self 
-        timeout = options[:timeout] || 1
-        case mode
-        when :async
-          @worker_pool.execute { deliver(consumer, handler, timeout) }
-        when :blocking
-          deliver(consumer, handler, timeout)
-        else
-          raise ArgumentError, "Not a valid subscription mode: #{mode}"
-        end
+      raise 'Subscriber already registered' unless @subscribed.compare_and_set(false, true)
+      setup!
+      mode = options[:mode] || :async
+      # TODO: this is a bit ugly, and is only here to support batching, 
+      #       this class shouldn't have to worry about that!
+      consumer = options[:consumer] || self 
+      timeout = options[:timeout] || 1
+      case mode
+      when :async
+        @worker_pool.execute { deliver(consumer, handler, timeout) }
+      when :blocking
+        deliver(consumer, handler, timeout)
+      else
+        raise ArgumentError, "Not a valid subscription mode: #{mode}"
       end
       nil
     end
@@ -53,28 +53,34 @@ module Autobahn
 
     def unsubscribe!
       @setup_lock.lock do
-        if @subscribed.compare_and_set(true, false)
-          @subscriptions.each(&:cancel)
-          @subscriptions = nil
-          @queues.map(&:channel).each(&:close)
-          @queues = nil
-          @worker_pool.shutdown
-          @worker_pool = nil
-          # TODO: should we await pool termination here?
-          @running.set(false)
-        end
+        @subscriptions.each(&:cancel) if @subscriptions
+        @subscriptions = nil
       end
     end
 
-    def disconnect!
-      unsubscribe!
+    def disconnect!(timeout=120)
+      @setup_lock.lock do
+        unsubscribe!
+        if @deliver.get
+          @queues.map(&:channel).each(&:close) if @queues
+          @queues = nil
+          @deliver.set(false)
+          if @worker_pool
+            @worker_pool.shutdown
+            unless @worker_pool.await_termination(timeout, Concurrency::TimeUnit::SECONDS)
+              @worker_pool = nil
+              raise 'Could not disconnect within the allotted time'
+            end
+          end
+        end
+      end
     end
 
     private
 
     def setup!
-      @setup_lock.lock do
-        if @subscribed.compare_and_set(false, true)
+      if @setup.compare_and_set(false, true)
+        @setup_lock.lock do
           @queues = create_queues
           @worker_pool = create_thread_pool
           @internal_queue = create_internal_queue
@@ -85,6 +91,7 @@ module Autobahn
               @internal_queue.put([headers, message])
             end
           end
+          @deliver.set(true)
         end
       end
     end
@@ -93,7 +100,7 @@ module Autobahn
       begin
         headers, message = consumer.next(timeout)
         handler.call(headers, message) if headers
-      end while @running.get
+      end while @deliver.get
     end
 
     def channels_by_consumer_tag
@@ -118,7 +125,7 @@ module Autobahn
 
     def find_subscription(consumer_tag)
       subscription = channels_by_consumer_tag[consumer_tag]
-      raise ArgumentError, 'Invalid consumer tag' unless subscription
+      raise ArgumentError, %(Invalid consumer tag: #{consumer_tag}) unless subscription
       subscription
     end
 

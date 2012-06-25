@@ -268,7 +268,7 @@ describe Autobahn do
         subscribed_queues.should == queue_names[8, 4]
       end
 
-      it 'does not receive messages after it has been unsubscribed' do
+      it 'does not receive new messages after it has been unsubscribed' do
         counting_down(messages.size) do |latch|
           message_count = 0
           @consumer.subscribe do |headers, message|
