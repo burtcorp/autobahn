@@ -22,6 +22,11 @@ module Autobahn
       @routing.keys.any?
     end
 
+    def size
+      setup!
+      @routing.keys.size
+    end
+
     def create!(options={})
       return if exists?
       connect!

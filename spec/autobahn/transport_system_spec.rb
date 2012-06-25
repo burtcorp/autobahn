@@ -7,6 +7,7 @@ module Autobahn
     let(:api_uri) { 'http://rmq:55627/api' }
     let(:cluster) do
       double(:cluster).tap do |c|
+        c.stub(:nodes).and_return([])
         c.stub(:bindings).and_return({})
         c.stub(:queues).and_return([])
       end
@@ -16,6 +17,23 @@ module Autobahn
         cf.stub(:new).and_return do
           cluster
         end
+      end
+    end
+
+    describe '#size' do
+      it 'returns the number of queues in the system' do
+        cluster.stub(:queues).and_return([
+          {'name' => 'queue0'},
+          {'name' => 'queue1'},
+          {'name' => 'queue2'}
+        ])
+        cluster.stub(:bindings).and_return([
+          {'source' => exchange_name, 'destination_type' => 'queue', 'destination' => 'queue0'},
+          {'source' => exchange_name, 'destination_type' => 'queue', 'destination' => 'queue1'},
+          {'source' => exchange_name, 'destination_type' => 'queue', 'destination' => 'queue2'}
+        ])
+        transport_system = described_class.new(api_uri, exchange_name, :cluster_factory => cluster_factory)
+        transport_system.size.should == 3
       end
     end
 
