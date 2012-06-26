@@ -25,7 +25,8 @@ module Autobahn
       timeout = options[:timeout] || 1
       case mode
       when :async
-        @worker_pool.execute { deliver(consumer, handler, timeout) }
+        @deliver_pool = create_thread_pool(1)
+        @deliver_pool.execute { deliver(consumer, handler, timeout) }
       when :blocking
         deliver(consumer, handler, timeout)
       else
@@ -58,19 +59,28 @@ module Autobahn
       end
     end
 
-    def disconnect!(timeout=120)
+    def disconnect!(timeout=30)
       @setup_lock.lock do
         unsubscribe!
         if @deliver.get
           @queues.map(&:channel).each(&:close) if @queues
           @queues = nil
           @deliver.set(false)
+          @deliver_pool_timeout = false
+          @worker_pool_timeout = false
+          if @deliver_pool
+            @deliver_pool.shutdown
+            @deliver_pool_timeout = !@deliver_pool.await_termination(timeout, Concurrency::TimeUnit::SECONDS)
+            @deliver_pool = nil
+          end
           if @worker_pool
             @worker_pool.shutdown
-            unless @worker_pool.await_termination(timeout, Concurrency::TimeUnit::SECONDS)
-              @worker_pool = nil
-              raise 'Could not disconnect within the allotted time'
-            end
+            @worker_pool_timeout = !@worker_pool.await_termination(timeout, Concurrency::TimeUnit::SECONDS)
+            @worker_pool = nil
+            @internal_queue = nil
+          end
+          if @deliver_pool_timeout || @worker_pool_timeout
+            raise 'Could not disconnect consumer in time'
           end
         end
       end
@@ -82,7 +92,7 @@ module Autobahn
       if @setup.compare_and_set(false, true)
         @setup_lock.lock do
           @queues = create_queues
-          @worker_pool = create_thread_pool
+          @worker_pool = create_thread_pool(@queues.size)
           @internal_queue = create_internal_queue
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
@@ -137,9 +147,9 @@ module Autobahn
       end
     end
 
-    def create_thread_pool
+    def create_thread_pool(size)
       thread_factory = Concurrency::NamingDaemonThreadFactory.new('autobahn')
-      Concurrency::Executors.new_fixed_thread_pool(@queues.size + 1, thread_factory) # 1 extra for async subscribers
+      Concurrency::Executors.new_fixed_thread_pool(size, thread_factory)
     end
   end
 
@@ -189,8 +199,8 @@ module Autobahn
       @consumer.unsubscribe!
     end
 
-    def disconnect!
-      @consumer.disconnect!
+    def disconnect!(*args)
+      @consumer.disconnect!(*args)
     end
   end
 
