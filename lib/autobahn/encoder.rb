@@ -1,16 +1,101 @@
 # encoding: utf-8
 
 module Autobahn
-  class StringEncoder
-    PROPERTIES = {:content_type => 'application/octet-stream'.freeze}.freeze
+  class Encoder
+    class << self
+      def encoder(content_type, options={})
+        content_encoding = options[:content_encoding]
+        encoder = nil
+        if content_type_registry[content_type]
+          encoder = content_type_registry[content_type].new
+          if content_encoding
+            if content_encoding_registry[content_encoding]
+              encoder = content_encoding_registry[content_encoding].new(encoder)
+            else
+              encoder = nil
+            end
+          end
+        end
+        encoder
+      end
+      alias_method :[], :encoder
+
+      private
+
+      def content_type_registry
+        @content_type_registry ||= Hash.new do |reg, ct|
+          e = @encoders.find { |e| e.content_type == ct }
+          reg[ct] = e if e
+        end
+      end
+
+      def content_encoding_registry
+        @content_encoding_registry ||= Hash.new do |reg, ce|
+          e = @encoders.find { |e| e.content_encoding == ce }
+          reg[ce] = e if e
+        end
+      end
+
+      def register(encoder_class)
+        @encoders ||= []
+        @encoders << encoder_class
+        @rehash = true
+      end
+
+      def inherited(c)
+        register(c)
+      end
+
+      public
+
+      begin :configuration_dsl
+        def content_type(content_type=nil)
+          @content_type = content_type if content_type
+          @content_type
+        end
+
+        def content_encoding(content_encoding=nil)
+          @content_encoding = content_encoding if content_encoding
+          @content_encoding
+        end
+
+        def encodes_batches!
+          @encodes_batches = true
+        end
+
+        def encodes_batches?
+          !!@encodes_batches
+        end
+      end
+    end
+
+    def initialize(wrapped_encoder=nil)
+      @wrapped_encoder = wrapped_encoder
+    end
 
     def properties
-      PROPERTIES
+      @properties ||= begin
+        ct = self.class.content_type
+        ce = self.class.content_encoding
+        p = {}
+        p[:content_type] = ct if ct
+        p[:content_encoding] = ce if ce
+        p = @wrapped_encoder.properties.merge(p) if @wrapped_encoder
+        p
+      end
     end
 
     def encodes_batches?
-      false
+      if @wrapped_encoder
+        @wrapped_encoder.encodes_batches?
+      else
+        self.class.encodes_batches?
+      end
     end
+  end
+
+  class StringEncoder < Encoder
+    content_type 'application/octet-stream'
 
     def encode(obj)
       obj.to_s
@@ -24,16 +109,9 @@ module Autobahn
   begin
     require 'json'
   
-    class JsonEncoder
-      PROPERTIES = {:content_type => 'application/json'.freeze}.freeze
-
-      def properties
-        PROPERTIES
-      end
-
-      def encodes_batches?
-        true
-      end
+    class JsonEncoder < Encoder
+      content_type 'application/json'
+      encodes_batches!
 
       def encode(obj)
         obj.to_json
@@ -49,16 +127,9 @@ module Autobahn
   begin
     require 'msgpack'
 
-    class MsgPackEncoder
-      PROPERTIES = {:content_type => 'application/msgpack'.freeze}.freeze
-
-      def properties
-        PROPERTIES
-      end
-
-      def encodes_batches?
-        true
-      end
+    class MsgPackEncoder < Encoder
+      content_type 'application/msgpack'
+      encodes_batches!
 
       def encode(obj)
         MessagePack.pack(obj)
@@ -74,16 +145,9 @@ module Autobahn
   begin
     require 'bson'
 
-    class BsonEncoder
-      PROPERTIES = {:content_type => 'application/bson'.freeze}.freeze
-
-      def content_type
-        CONTENT_TYPE
-      end
-      
-      def encodes_batches?
-        true
-      end
+    class BsonEncoder < Encoder
+      content_type 'application/bson'
+      encodes_batches!
 
       def encode(obj)
         BSON.serialize(obj).to_s
@@ -100,29 +164,13 @@ module Autobahn
     require 'zlib'
     require 'stringio'
 
-    class GzipEncoder
-      CONTENT_ENCODING = 'gzip'.freeze
-
-      def initialize(decorated_encoder)
-        @decorated_encoder = decorated_encoder
-      end
-
-      def properties
-        @properties ||= begin
-          p = @decorated_encoder.properties.dup
-          p[:content_encoding] = CONTENT_ENCODING
-          p
-        end
-      end
-
-      def encodes_batches?
-        @decorated_encoder.encodes_batches?
-      end
+    class GzipEncoder < Encoder
+      content_encoding 'gzip'
 
       def encode(obj)
         io = StringIO.new
         gz = Zlib::GzipWriter.new(io)
-        gz.print(@decorated_encoder.encode(obj))
+        gz.print(@wrapped_encoder.encode(obj))
         gz.close
         io.string
       end
@@ -130,7 +178,7 @@ module Autobahn
       def decode(str)
         io = StringIO.new(str)
         gz = Zlib::GzipReader.new(io)
-        @decorated_encoder.decode(gz.read).tap { gz.close }
+        @wrapped_encoder.decode(gz.read).tap { gz.close }
       end
     end
   end
