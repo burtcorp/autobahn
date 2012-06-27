@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    autobahn (1.2.4-java)
+    autobahn (1.2.5-java)
       hot_bunnies (= 1.4.0.pre2)
       httpclient (~> 2.2.5)
       jruby-openssl
@@ -21,7 +21,6 @@ GEM
     httpclient (2.2.5)
     jruby-openssl (0.7.7)
       bouncy-castle-java (>= 1.5.0146.1)
-    json (1.7.3)
     json (1.7.3-java)
     ning-compress-jars (0.9.5-java)
     rack (1.4.1)
