@@ -21,7 +21,9 @@ GEM
     httpclient (2.2.5)
     jruby-openssl (0.7.7)
       bouncy-castle-java (>= 1.5.0146.1)
+    json (1.7.3)
     json (1.7.3-java)
+    ning-compress-jars (0.9.5-java)
     rack (1.4.1)
     rack-protection (1.2.0)
       rack
@@ -45,4 +47,5 @@ PLATFORMS
 DEPENDENCIES
   autobahn!
   geminabox
+  ning-compress-jars
   rspec

@@ -160,26 +160,44 @@ module Autobahn
   rescue LoadError
   end
 
-  begin
-    require 'zlib'
-    require 'stringio'
+  require 'zlib'
+  require 'stringio'
 
-    class GzipEncoder < Encoder
-      content_encoding 'gzip'
+  class GzipEncoder < Encoder
+    content_encoding 'gzip'
+
+    def encode(obj)
+      io = StringIO.new
+      gz = Zlib::GzipWriter.new(io)
+      gz.print(@wrapped_encoder.encode(obj))
+      gz.close
+      io.string
+    end
+
+    def decode(str)
+      io = StringIO.new(str)
+      gz = Zlib::GzipReader.new(io)
+      @wrapped_encoder.decode(gz.read).tap { gz.close }
+    end
+  end
+
+  begin
+    require 'ning-compress-jars'
+
+    class LzfEncoder < Encoder
+      import 'com.ning.compress.lzf.LZFEncoder'
+      import 'com.ning.compress.lzf.LZFDecoder'
+
+      content_encoding 'lzf'
 
       def encode(obj)
-        io = StringIO.new
-        gz = Zlib::GzipWriter.new(io)
-        gz.print(@wrapped_encoder.encode(obj))
-        gz.close
-        io.string
+        String.from_java_bytes(LZFEncoder.encode(@wrapped_encoder.encode(obj).to_java_bytes))
       end
 
       def decode(str)
-        io = StringIO.new(str)
-        gz = Zlib::GzipReader.new(io)
-        @wrapped_encoder.decode(gz.read).tap { gz.close }
+        @wrapped_encoder.decode(String.from_java_bytes(LZFDecoder.decode(str.to_java_bytes)))
       end
     end
+  rescue LoadError
   end
 end

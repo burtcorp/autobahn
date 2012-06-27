@@ -67,4 +67,18 @@ module Autobahn
       end
     end
   end
+
+  describe LzfEncoder do
+    let :wrapped_encoder do
+      JsonEncoder.new
+    end
+
+    let :lzf_encoder do
+      LzfEncoder.new(wrapped_encoder)
+    end
+
+    it 'compresses and decompresses data' do
+      lzf_encoder.decode(lzf_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
+    end
+  end
 end
