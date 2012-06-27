@@ -1,8 +1,8 @@
 PATH
   remote: .
   specs:
-    autobahn (1.2.1-java)
-      hot_bunnies (= 1.4.0.pre1)
+    autobahn (1.2.3-java)
+      hot_bunnies (= 1.4.0.pre2)
       httpclient (~> 2.2.5)
       jruby-openssl
       json
@@ -17,7 +17,7 @@ GEM
       builder
       httpclient
       sinatra
-    hot_bunnies (1.4.0.pre1-java)
+    hot_bunnies (1.4.0.pre2-java)
     httpclient (2.2.5)
     jruby-openssl (0.7.7)
       bouncy-castle-java (>= 1.5.0146.1)

@@ -96,9 +96,17 @@ module Autobahn
           @internal_queue = create_internal_queue
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
-            subscription.each(:blocking => false, :executor => @worker_pool) do |headers, encoded_message|
-              message = @encoder.decode(encoded_message)
-              @internal_queue.put([headers, message])
+            @worker_pool.submit do
+              begin
+                options = {:blocking => true}
+                options[:buffer_size] = @buffer_size/@subscriptions.size if @buffer_size
+                subscription.each(options) do |headers, encoded_message|
+                  message = @encoder.decode(encoded_message)
+                  until @internal_queue.offer([headers, message], 1, Concurrency::TimeUnit::SECONDS)
+                    break unless @deliver.get
+                  end
+                end
+              end
             end
           end
           @deliver.set(true)
