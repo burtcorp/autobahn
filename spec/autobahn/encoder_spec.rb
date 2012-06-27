@@ -57,6 +57,10 @@ module Autobahn
       GzipEncoder.new(wrapped_encoder)
     end
 
+    it 'compresses and decompresses data' do
+      gzip_encoder.decode(gzip_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
+    end
+
     describe '#properties' do
       it 'inherits its content type from the encoder it wraps' do
         gzip_encoder.properties[:content_type].should == wrapped_encoder.properties[:content_type]

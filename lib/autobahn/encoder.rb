@@ -160,24 +160,36 @@ module Autobahn
   rescue LoadError
   end
 
-  require 'zlib'
-  require 'stringio'
-
   class GzipEncoder < Encoder
+    import 'java.util.zip.GZIPOutputStream'
+    import 'java.util.zip.GZIPInputStream'
+    import 'java.io.ByteArrayOutputStream'
+    import 'java.io.ByteArrayInputStream'
+
     content_encoding 'gzip'
 
     def encode(obj)
-      io = StringIO.new
-      gz = Zlib::GzipWriter.new(io)
-      gz.print(@wrapped_encoder.encode(obj))
-      gz.close
-      io.string
+      baos = ByteArrayOutputStream.new
+      gzos = GZIPOutputStream.new(baos)
+      strb = @wrapped_encoder.encode(obj).to_java_bytes
+      gzos.write(strb, 0, strb.length)
+      gzos.close
+      String.from_java_bytes(baos.to_byte_array)
     end
 
     def decode(str)
-      io = StringIO.new(str)
-      gz = Zlib::GzipReader.new(io)
-      @wrapped_encoder.decode(gz.read).tap { gz.close }
+      bais = ByteArrayInputStream.new(str.to_java_bytes)
+      gzis = GZIPInputStream.new(bais)
+      output = ''.force_encoding(Encoding::BINARY)
+      buffer = Java::byte[1024 * 16].new
+      until gzis.available == 0
+        bytes_read = gzis.read(buffer)
+        if bytes_read > 0
+          output << String.from_java_bytes(buffer)[0, bytes_read]
+        end
+      end
+      gzis.close
+      @wrapped_encoder.decode(output)
     end
   end
 
