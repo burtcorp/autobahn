@@ -52,6 +52,19 @@ module Autobahn
           end
         end
       end
+      setup!(true)
+    end
+
+    def destroy!
+      setup!(true)
+      connect!
+      channel = @connections.values.sample.create_channel
+      if cluster.exchanges.find { |e| e['name'] == @exchange_name }
+        channel.exchange_delete(@exchange_name)
+      end
+      @routing.keys.each do |queue_name|
+        channel.queue_delete(queue_name)
+      end
     end
 
     def consumer(options={})
@@ -87,8 +100,9 @@ module Autobahn
       end
     end
 
-    def setup!
-      return if defined? @routing
+    def setup!(reload=false)
+      @routing = nil if reload
+      return if @routing
       bindings = @cluster.bindings.select { |b| b['source'] == @exchange_name && b['destination_type'] == 'queue' }
       @routing = bindings.reduce({}) do |acc, binding|
         queue_name = binding['destination']

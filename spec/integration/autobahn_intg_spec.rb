@@ -555,4 +555,30 @@ describe Autobahn do
       end
     end
   end
+
+  describe 'Destroying a transport system' do
+    before do
+      @stuff_ts = Autobahn.transport_system(api_uri, 'stuff')
+      @stuff_ts.create!
+      @stuff_ts.destroy!
+    end
+
+    after do
+      @stuff_ts.disconnect!
+    end
+
+    it 'removes all queues' do
+      queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('stuff') }
+      queues.should be_empty
+    end
+
+    it 'removes the exchange' do
+      exchange = @stuff_ts.cluster.exchanges.find { |e| e['name'] == 'stuff' }
+      exchange.should be_nil
+    end
+
+    it 'does nothing if the system already does not exist' do
+      expect { @stuff_ts.destroy! }.to_not raise_error
+    end
+  end
 end
