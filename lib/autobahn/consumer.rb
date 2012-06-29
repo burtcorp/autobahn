@@ -8,6 +8,9 @@ module Autobahn
       @encoder = encoder
       @prefetch = options[:prefetch]
       @buffer_size = options[:buffer_size]
+      if @buffer_size < @routing.size
+        raise ArgumentError, sprintf('Buffer size too small: %d (there are %d queues)', @buffer_size, @routing.size)
+      end
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @setup = Concurrency::AtomicBoolean.new(false)
       @deliver = Concurrency::AtomicBoolean.new(false)
@@ -94,13 +97,14 @@ module Autobahn
           @queues = create_queues
           @worker_pool = create_thread_pool(@queues.size)
           @internal_queue = create_internal_queue
+          @worker_tasks = []
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
-            @worker_pool.submit do
+            queue_options = {:blocking => true}
+            queue_options[:buffer_size] = @buffer_size/@subscriptions.size if @buffer_size
+            @worker_tasks << @worker_pool.submit do
               begin
-                options = {:blocking => true}
-                options[:buffer_size] = @buffer_size/@subscriptions.size if @buffer_size
-                subscription.each(options) do |headers, encoded_message|
+                subscription.each(queue_options) do |headers, encoded_message|
                   message = @encoder.decode(encoded_message)
                   until @internal_queue.offer([headers, message], 1, Concurrency::TimeUnit::SECONDS)
                     break unless @deliver.get
