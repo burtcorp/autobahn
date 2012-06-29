@@ -11,6 +11,14 @@ module Autobahn
       if @buffer_size && @buffer_size < @routing.size
         raise ArgumentError, sprintf('Buffer size too small: %d (there are %d queues)', @buffer_size, @routing.size)
       end
+      @demultiplexer = options[:demultiplexer]
+      unless @demultiplexer
+        if @buffer_size
+          @demultiplexer = BlockingQueueDemultiplexer.new(@buffer_size)
+        else
+          @demultiplexer = BlockingQueueDemultiplexer.new
+        end
+      end
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @setup = Concurrency::AtomicBoolean.new(false)
       @deliver = Concurrency::AtomicBoolean.new(false)
@@ -40,11 +48,7 @@ module Autobahn
 
     def next(timeout=nil)
       setup!
-      if timeout
-        @internal_queue.poll((timeout * 1000).to_i, Concurrency::TimeUnit::MILLISECONDS)
-      else
-        @internal_queue.take
-      end
+      @demultiplexer.take(timeout)
     end
 
     def ack(consumer_tag, delivery_tag, options={})
@@ -75,7 +79,7 @@ module Autobahn
               raise 'Could not shut down delivery thread pool'
             end
             @deliver_pool = nil
-            @internal_queue = nil
+            @demultiplexer = nil
           end
         end
       end
@@ -87,10 +91,9 @@ module Autobahn
       if @setup.compare_and_set(false, true)
         @setup_lock.lock do
           @queues = create_queues
-          @internal_queue = create_internal_queue
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
-            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder, @internal_queue)
+            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder, @demultiplexer)
             subscription.start(queue_consumer)
           end
           @deliver.set(true)
@@ -129,14 +132,6 @@ module Autobahn
       subscription = channels_by_consumer_tag[consumer_tag]
       raise ArgumentError, %(Invalid consumer tag: #{consumer_tag}) unless subscription
       subscription
-    end
-
-    def create_internal_queue
-      if @buffer_size || @prefetch
-        Concurrency::ArrayBlockingQueue.new(@buffer_size || (@prefetch * @queues.size))
-      else
-        Concurrency::LinkedBlockingQueue.new
-      end
     end
 
     def create_thread_pool(size)
@@ -224,17 +219,39 @@ module Autobahn
   end
 
   class QueueingConsumer < HotBunnies::Queue::BaseConsumer
-    def initialize(channel, encoder, internal_queue)
+    def initialize(channel, encoder, demultiplexer)
       super(channel)
       @encoder = encoder
-      @internal_queue = internal_queue
+      @demultiplexer = demultiplexer
     end
 
     def deliver(*pair)
       pair[1] = @encoder.decode(pair[1])
-      @internal_queue.put(pair)
+      @demultiplexer.put(pair)
     rescue Concurrency::InterruptedException => e
-      $stderr.puts("INTERRUPTED!")
+      # this means we blocked on #put when the thread pool shut down
+    end
+  end
+
+  class BlockingQueueDemultiplexer
+    def initialize(buffer_size=nil)
+      if buffer_size
+        @queue = Concurrency::ArrayBlockingQueue.new(buffer_size)
+      else
+        @queue = Concurrency::LinkedBlockingQueue.new
+      end
+    end
+
+    def put(pair)
+      @queue.put(pair)
+    end
+
+    def take(timeout=nil)
+      if timeout
+        @queue.poll((timeout * 1000).to_i, Concurrency::TimeUnit::MILLISECONDS)
+      else
+        @queue.take
+      end
     end
   end
 end
