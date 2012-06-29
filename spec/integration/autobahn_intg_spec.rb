@@ -127,7 +127,7 @@ describe Autobahn do
       end
 
       it 'uses the provided encoder to also compress messages' do
-        compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
+        compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 0, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
         actual_message = @queues.map { |q| h, m = q.get; m }.compact.first
         actual_message.should == compressed_message
       end
