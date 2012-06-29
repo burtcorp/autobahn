@@ -17,8 +17,8 @@ module Autobahn
       @publishers = []
     end
 
-    def exists?
-      setup!
+    def exists?(reload=false)
+      setup!(reload)
       @routing.keys.any?
     end
 
@@ -27,8 +27,12 @@ module Autobahn
       @routing.keys.size
     end
 
+    def connected?
+      !!@connections
+    end
+
     def create!(options={})
-      return if exists?
+      return if exists?(true)
       connect!
       connections = @connections.sort.map(&:last)
       queues_per_node = options[:queues_per_node] || 1
@@ -58,6 +62,7 @@ module Autobahn
     def destroy!
       setup!(true)
       connect!
+      disconnect_channels!
       channel = @connections.values.sample.create_channel
       if cluster.exchanges.find { |e| e['name'] == @exchange_name }
         channel.exchange_delete(@exchange_name)
@@ -65,6 +70,7 @@ module Autobahn
       @routing.keys.each do |queue_name|
         channel.queue_delete(queue_name)
       end
+      setup!(true)
     end
 
     def consumer(options={})
@@ -87,8 +93,7 @@ module Autobahn
     end
 
     def disconnect!
-      @consumers.each(&:disconnect!)
-      @publishers.each(&:disconnect!)
+      disconnect_channels!
       @connections.values.each(&:close) if @connections
     end
 
@@ -128,6 +133,13 @@ module Autobahn
         acc[node] = HotBunnies.connect(connection_configuration(node))
         acc
       end
+    end
+
+    def disconnect_channels!
+      @publishers.each(&:disconnect!)
+      @publishers = []
+      @consumers.each(&:disconnect!)
+      @consumers = []
     end
 
     def connection_configuration(node)
