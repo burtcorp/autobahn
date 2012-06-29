@@ -6,6 +6,7 @@ require 'java'
 module Autobahn
   module Concurrency
     import 'java.lang.Thread'
+    import 'java.lang.InterruptedException'
     import 'java.util.concurrent.atomic.AtomicInteger'
     import 'java.util.concurrent.atomic.AtomicBoolean'
     import 'java.util.concurrent.ThreadFactory'
@@ -48,6 +49,13 @@ module Autobahn
       ensure
         @lock.unlock
       end
+    end
+
+    def self.shutdown_thread_pool!(tp, timeout=1, hard_timeout=30)
+      tp.shutdown
+      return true if tp.await_termination(timeout, TimeUnit::SECONDS)
+      tp.shutdown_now
+      return tp.await_termination(hard_timeout, TimeUnit::SECONDS)
     end
   end
 end

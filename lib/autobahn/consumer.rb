@@ -55,16 +55,23 @@ module Autobahn
       find_subscription(consumer_tag).basic_reject(delivery_tag, !!options[:requeue])
     end
 
-    def unsubscribe!
+    def unsubscribe!(timeout=30)
       @setup_lock.lock do
         @subscriptions.each(&:cancel) if @subscriptions
         @subscriptions = nil
+        if @worker_pool
+          unless Concurrency.shutdown_thread_pool!(@worker_pool, 1, timeout)
+            raise 'Could not shut down subscriber thread pool'
+          end
+          @worker_pool = nil
+          @worker_tasks = nil
+        end
       end
     end
 
     def disconnect!(timeout=30)
       @setup_lock.lock do
-        unsubscribe!
+        unsubscribe!(timeout)
         if @deliver.get
           @queues.map(&:channel).each(&:close) if @queues
           @queues = nil
@@ -72,18 +79,11 @@ module Autobahn
           @deliver_pool_timeout = false
           @worker_pool_timeout = false
           if @deliver_pool
-            @deliver_pool.shutdown
-            @deliver_pool_timeout = !@deliver_pool.await_termination(timeout, Concurrency::TimeUnit::SECONDS)
+            unless Concurrency.shutdown_thread_pool!(@deliver_pool, 1, timeout)
+              raise 'Could not shut down delivery thread pool'
+            end
             @deliver_pool = nil
-          end
-          if @worker_pool
-            @worker_pool.shutdown
-            @worker_pool_timeout = !@worker_pool.await_termination(timeout, Concurrency::TimeUnit::SECONDS)
-            @worker_pool = nil
             @internal_queue = nil
-          end
-          if @deliver_pool_timeout || @worker_pool_timeout
-            raise 'Could not disconnect consumer in time'
           end
         end
       end
@@ -106,10 +106,13 @@ module Autobahn
               begin
                 subscription.each(queue_options) do |headers, encoded_message|
                   message = @encoder.decode(encoded_message)
-                  until @internal_queue.offer([headers, message], 1, Concurrency::TimeUnit::SECONDS)
-                    break unless @deliver.get
+                  begin
+                    @internal_queue.put([headers, message])
+                  rescue Concurrency::InterruptedException => e
+                    $stderr.puts("INTERRUPTED!")
                   end
                 end
+                $stderr.puts("CONSUMER STPPPED")
               end
             end
           end
