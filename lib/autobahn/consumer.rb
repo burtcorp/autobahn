@@ -8,7 +8,7 @@ module Autobahn
       @encoder = encoder
       @prefetch = options[:prefetch]
       @buffer_size = options[:buffer_size]
-      if @buffer_size < @routing.size
+      if @buffer_size && @buffer_size < @routing.size
         raise ArgumentError, sprintf('Buffer size too small: %d (there are %d queues)', @buffer_size, @routing.size)
       end
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
