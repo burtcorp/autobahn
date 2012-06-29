@@ -1,5 +1,6 @@
 # encoding: utf-8
 
+require 'hot_bunnies'
 require 'autobahn/version'
 require 'autobahn/concurrency'
 require 'autobahn/cluster'

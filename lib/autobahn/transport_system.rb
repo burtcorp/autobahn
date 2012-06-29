@@ -1,7 +1,5 @@
 # encoding: utf-8
 
-require 'hot_bunnies'
-
 
 module Autobahn
   class TransportSystem

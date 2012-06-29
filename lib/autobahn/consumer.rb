@@ -59,13 +59,6 @@ module Autobahn
       @setup_lock.lock do
         @subscriptions.each(&:cancel) if @subscriptions
         @subscriptions = nil
-        if @worker_pool
-          unless Concurrency.shutdown_thread_pool!(@worker_pool, 1, timeout)
-            raise 'Could not shut down subscriber thread pool'
-          end
-          @worker_pool = nil
-          @worker_tasks = nil
-        end
       end
     end
 
@@ -77,7 +70,6 @@ module Autobahn
           @queues = nil
           @deliver.set(false)
           @deliver_pool_timeout = false
-          @worker_pool_timeout = false
           if @deliver_pool
             unless Concurrency.shutdown_thread_pool!(@deliver_pool, 1, timeout)
               raise 'Could not shut down delivery thread pool'
@@ -95,26 +87,11 @@ module Autobahn
       if @setup.compare_and_set(false, true)
         @setup_lock.lock do
           @queues = create_queues
-          @worker_pool = create_thread_pool(@queues.size)
           @internal_queue = create_internal_queue
-          @worker_tasks = []
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
-            queue_options = {:blocking => true}
-            queue_options[:buffer_size] = @buffer_size/@subscriptions.size if @buffer_size
-            @worker_tasks << @worker_pool.submit do
-              begin
-                subscription.each(queue_options) do |headers, encoded_message|
-                  message = @encoder.decode(encoded_message)
-                  begin
-                    @internal_queue.put([headers, message])
-                  rescue Concurrency::InterruptedException => e
-                    $stderr.puts("INTERRUPTED!")
-                  end
-                end
-                $stderr.puts("CONSUMER STPPPED")
-              end
-            end
+            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder, @internal_queue)
+            subscription.start(queue_consumer)
           end
           @deliver.set(true)
         end
@@ -243,6 +220,21 @@ module Autobahn
     def method_missing(name, *args, &block)
       super unless @headers.responds_to?(name)
       @headers.method_missing?(name, *args, &block)
+    end
+  end
+
+  class QueueingConsumer < HotBunnies::Queue::BaseConsumer
+    def initialize(channel, encoder, internal_queue)
+      super(channel)
+      @encoder = encoder
+      @internal_queue = internal_queue
+    end
+
+    def deliver(*pair)
+      pair[1] = @encoder.decode(pair[1])
+      @internal_queue.put(pair)
+    rescue Concurrency::InterruptedException => e
+      $stderr.puts("INTERRUPTED!")
     end
   end
 end
