@@ -504,6 +504,16 @@ describe Autobahn do
         queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }
         queues.group_by { |q| q['node'] }.map { |g, qs| qs.size }.should == [1, 1, 1, 1]
       end
+
+      it 'creates a durable exchange' do
+        exchange = @stuff_ts.cluster.exchanges.find { |e| e['name'] == 'stuff' }
+        exchange['durable'].should be_true
+      end
+
+      it 'create durable queues' do
+        queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }
+        queues.map { |q| q['durable'] }.uniq.should == [true]
+      end
     end
 
     context 'when creating a transport system with options' do
@@ -513,7 +523,8 @@ describe Autobahn do
           :queues_per_node => 2, 
           :routing_keys_per_queue => 4,
           :queue_prefix => 'xyz',
-          :routing_key_prefix => 'blipp_'
+          :routing_key_prefix => 'blipp_',
+          :durable => false
         )
       end
 
@@ -564,6 +575,16 @@ describe Autobahn do
           @connection.create_channel.exchange_delete('more_stuff') rescue nil
           ts.cluster.queues.select { |q| q['name'].start_with?('more_stuff_') }.each { |q| @connection.create_channel.queue_delete(q['name']) rescue nil }
         end
+      end
+
+      it 'creates a non-durable exchange when :durable is false' do
+        exchange = @stuff_ts.cluster.exchanges.find { |e| e['name'] == 'stuff' }
+        exchange['durable'].should be_false
+      end
+
+      it 'create non-durable queues when :durable is false' do
+        queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }
+        queues.map { |q| q['durable'] }.uniq.should == [false]
       end
     end
   end

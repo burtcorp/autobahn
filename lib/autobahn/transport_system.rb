@@ -39,14 +39,14 @@ module Autobahn
       rk_prefix = options[:routing_key_prefix] || queue_prefix
       queue_suffix_width = [Math.log10(connections.size * queues_per_node).ceil, 2].max
       rk_suffix_width = [Math.log10(connections.size * queues_per_node * rks_per_queue).ceil, 2].max
-      exchange = connections.sample.create_channel.exchange(@exchange_name, :type => :direct)
+      exchange = connections.sample.create_channel.exchange(@exchange_name, :type => :direct, :durable => options.fetch(:durable, true))
       connections.size.times do |node_index|
         connection = connections[node_index]
         channel = connection.create_channel
         queues_per_node.times do |queue_offset|
           queue_index = node_index * queues_per_node + queue_offset
           queue_name = "#{queue_prefix}#{queue_index.to_s.rjust(queue_suffix_width, '0')}"
-          queue = channel.queue(queue_name)
+          queue = channel.queue(queue_name, :durable => options.fetch(:durable, true))
           rks_per_queue.times do |rk_offset|
             rk_index = queue_index * rks_per_queue + rk_offset
             rk_name = "#{rk_prefix}#{rk_index.to_s.rjust(rk_suffix_width, '0')}"
