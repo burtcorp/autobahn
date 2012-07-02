@@ -74,7 +74,7 @@ module Autobahn
     def consumer(options={})
       setup!
       connect!
-      consumer = Consumer.new(@routing, @connections, @encoder, options)
+      consumer = Consumer.new(@routing, @connections, Encoder, options)
       @consumers << consumer
       @consumers.last
     end

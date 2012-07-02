@@ -2,6 +2,18 @@ require 'bundler/setup'
 require 'autobahn'
 
 
+module StubHelpers
+  def stubs(*names)
+    names.each do |name|
+      let(name) { stub(name) }
+    end
+  end
+end
+
+RSpec.configure do |conf|
+  conf.extend(StubHelpers)
+end
+
 RSpec::Matchers.define :time_out do
   def timeout
     @timeout || 10

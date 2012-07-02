@@ -2,10 +2,10 @@
 
 module Autobahn
   class Consumer
-    def initialize(routing, connections, encoder, options)
+    def initialize(routing, connections, encoder_registry, options)
       @routing = routing
       @connections = connections
-      @encoder = encoder
+      @encoder_registry = encoder_registry
       @prefetch = options[:prefetch]
       @buffer_size = options[:buffer_size]
       if @buffer_size && @buffer_size < @routing.size
@@ -91,7 +91,7 @@ module Autobahn
           @queues = create_queues
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
-            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder, @demultiplexer)
+            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer)
             subscription.start(queue_consumer)
           end
           @deliver.set(true)
@@ -166,14 +166,16 @@ module Autobahn
   end
 
   class QueueingConsumer < HotBunnies::Queue::BaseConsumer
-    def initialize(channel, encoder, demultiplexer)
+    def initialize(channel, encoder_registry, demultiplexer)
       super(channel)
-      @encoder = encoder
+      @encoder_registry = encoder_registry
       @demultiplexer = demultiplexer
     end
 
     def deliver(*pair)
-      pair[1] = @encoder.decode(pair[1])
+      headers, encoded_message = pair
+      encoder = @encoder_registry[headers.content_type, :content_encoding => headers.content_encoding]
+      pair[1] = encoder.decode(encoded_message)
       @demultiplexer.put(pair)
     end
   end

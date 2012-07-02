@@ -6,7 +6,7 @@ module Autobahn
       def encoder(content_type, options={})
         content_encoding = options[:content_encoding]
         encoder = nil
-        if content_type_registry[content_type]
+        if content_type && content_type_registry[content_type]
           encoder = content_type_registry[content_type].new
           if content_encoding
             if content_encoding_registry[content_encoding]
