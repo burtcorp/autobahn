@@ -9,6 +9,7 @@ module Autobahn
       @encoder = encoder
       @strategy = options[:strategy] || RandomPublisherStrategy.new
       @batch_options = options[:batch] || {:size => 1}
+      @logger = options[:logger] || NullLogger.new
       @batch_buffers = Hash.new { |h, k| h[k] = Concurrency::LinkedBlockingDeque.new }
     end
 
@@ -49,6 +50,8 @@ module Autobahn
     end
 
     private
+
+    attr_reader :logger
 
     def exchanges_by_routing_key
       @exchanges_by_routing_key ||= begin

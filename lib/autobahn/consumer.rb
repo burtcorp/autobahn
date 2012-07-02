@@ -10,7 +10,8 @@ module Autobahn
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @buffer_size = options[:buffer_size]
       check_buffer_size!
-      @demultiplexer = options[:demultiplexer] || create_demultiplexer
+      @demultiplexer = options[:demultiplexer] || BlockingQueueDemultiplexer.new(:buffer_size => @buffer_size)
+      @logger = options[:logger] || NullLogger.new
       @setup = Concurrency::AtomicBoolean.new(false)
       @deliver = Concurrency::AtomicBoolean.new(false)
       @subscribed = Concurrency::AtomicBoolean.new(false)
@@ -49,8 +50,20 @@ module Autobahn
 
     def unsubscribe!(timeout=30)
       @setup_lock.lock do
-        @subscriptions.each(&:cancel) if @subscriptions
-        @subscriptions = nil
+        if @subscriptions
+          @subscriptions.each do |subscription|
+            logger.debug { "Unsubscribing from #{subscription.queue_name}" }
+            subscription.cancel
+          end
+          @subscriptions = nil
+          logger.info do
+            if @demultiplexer.respond_to?(:queued_message_count)
+              "Consumer unsubscribed, #{@demultiplexer.queued_message_count} messages buffered"
+            else
+              'Consumer unsubscribed'
+            end
+          end
+        end
       end
     end
 
@@ -58,6 +71,7 @@ module Autobahn
       @setup_lock.lock do
         unsubscribe!(timeout)
         if @deliver.get
+          logger.debug { 'Disconnecting consumer' }
           @queues.map(&:channel).each(&:close) if @queues
           @queues = nil
           @deliver.set(false)
@@ -69,11 +83,14 @@ module Autobahn
             @deliver_pool = nil
             @demultiplexer = nil
           end
+          logger.info { 'Consumer disconnected' }
         end
       end
     end
 
     private
+
+    attr_reader :logger
 
     def check_buffer_size!
       if @buffer_size
@@ -90,6 +107,7 @@ module Autobahn
           @queues = create_queues
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
+            logger.info { sprintf('Subscribing to %s with prefetch %d', subscription.queue_name, @prefetch || 0) }
             queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer)
             subscription.start(queue_consumer)
           end
@@ -107,14 +125,6 @@ module Autobahn
 
     def channels_by_consumer_tag
       @channels_by_consumer_tag ||= Hash[@subscriptions.map { |s| [s.consumer_tag, s.channel] }]
-    end
-
-    def create_demultiplexer
-      if @buffer_size
-        BlockingQueueDemultiplexer.new(@buffer_size)
-      else
-        BlockingQueueDemultiplexer.new
-      end
     end
 
     def create_subscriptions
@@ -201,12 +211,16 @@ module Autobahn
   end
 
   class BlockingQueueDemultiplexer
-    def initialize(buffer_size=nil)
-      if buffer_size
-        @queue = Concurrency::ArrayBlockingQueue.new(buffer_size)
+    def initialize(options={})
+      if options[:buffer_size]
+        @queue = Concurrency::ArrayBlockingQueue.new(options[:buffer_size])
       else
         @queue = Concurrency::LinkedBlockingQueue.new
       end
+    end
+
+    def queued_message_count
+      @queue.size
     end
 
     def put(pair)

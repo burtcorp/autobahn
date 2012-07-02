@@ -11,6 +11,7 @@ module Autobahn
       @host_resolver = options[:host_resolver] || DefaultHostResolver.new
       @encoder = options[:encoder] || StringEncoder.new
       @batch_options = options[:batch]
+      @logger = options[:logger] || NullLogger.new
       @consumers = []
       @publishers = []
     end
@@ -76,6 +77,7 @@ module Autobahn
     def consumer(options={})
       setup!
       connect!
+      options = {:logger => @logger}.merge(options)
       consumer = Consumer.new(@routing, @connections, Encoder, options)
       @consumers << consumer
       @consumers.last
@@ -88,6 +90,7 @@ module Autobahn
         raise ArgumentError, 'Encoder does not support batching!' unless @encoder.encodes_batches?
         options = options.merge(:batch => @batch_options)
       end
+      options = {:logger => @logger}.merge(options)
       publisher = Publisher.new(@exchange_name, @routing, @connections, @encoder, options)
       publisher.start!
       @publishers << publisher
@@ -100,6 +103,8 @@ module Autobahn
     end
 
     private
+
+    attr_reader :logger
 
     class DefaultHostResolver
       def resolve(node)

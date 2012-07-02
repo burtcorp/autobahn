@@ -26,6 +26,13 @@ describe Autobahn do
     sleep(0.1)
   end
 
+  def create_transport_system(name, options={})
+    logger = Logger.new(STDERR)
+    logger.level = Logger.const_get((ENV['LOG_LEVEL'] || 'FATAL').upcase)
+    logger.progname = name
+    Autobahn.transport_system(api_uri, name, options.merge(:logger => logger))
+  end
+
   before :all do
     begin
       num_nodes.times do |i|
@@ -46,7 +53,7 @@ describe Autobahn do
   end
 
   before :all do
-    @transport_system = Autobahn.transport_system(api_uri, exchange_name)
+    @transport_system = create_transport_system(exchange_name)
   end
 
   after :all do
@@ -97,7 +104,7 @@ describe Autobahn do
 
     context 'with encoded messages' do
       before do
-        @encoded_transport_system = Autobahn.transport_system(api_uri, exchange_name, :encoder => Autobahn::JsonEncoder.new)
+        @encoded_transport_system = create_transport_system(exchange_name, :encoder => Autobahn::JsonEncoder.new)
       end
 
       after do
@@ -116,7 +123,7 @@ describe Autobahn do
       before do
         @encoder = Autobahn::GzipEncoder.new(Autobahn::JsonEncoder.new)
         options = {:encoder => @encoder}
-        @compressed_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+        @compressed_transport_system = create_transport_system(exchange_name, options)
         publisher = @compressed_transport_system.publisher
         publisher.publish({'hello' => 'world'})
         await_delivery
@@ -167,7 +174,7 @@ describe Autobahn do
             :timeout => @batch_timeout
           }
         }
-        @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+        @batching_transport_system = create_transport_system(exchange_name, options)
         @publisher = @batching_transport_system.publisher
       end
 
@@ -321,7 +328,7 @@ describe Autobahn do
 
     context 'with encoded messages' do
       before do
-        @encoded_transport_system = Autobahn.transport_system(api_uri, exchange_name)
+        @encoded_transport_system = create_transport_system(exchange_name)
       end
 
       after do
@@ -339,7 +346,7 @@ describe Autobahn do
 
     context 'with compressed messages' do
       before do
-        @compressed_transport_system = Autobahn.transport_system(api_uri, exchange_name)
+        @compressed_transport_system = create_transport_system(exchange_name)
         compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
         @exchange.publish(compressed_message, :routing_key => routing_keys.sample, :properties => {:content_type => 'application/json', :content_encoding => 'gzip'})
         await_delivery
@@ -363,7 +370,7 @@ describe Autobahn do
         options = {
           :batch => {:size => @batch_size, :timeout => 2}
         }
-        @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+        @batching_transport_system = create_transport_system(exchange_name, options)
         messages.each_slice(@batch_size) do |batch|
           @exchange.publish(encoder.encode(batch), :routing_key => routing_keys.sample, :properties => encoder.properties)
         end
@@ -422,7 +429,7 @@ describe Autobahn do
     end
 
     def transport_messages!(options)
-      transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
+      transport_system = create_transport_system(exchange_name, options)
       publisher = transport_system.publisher
       consumer = transport_system.consumer
       messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
@@ -464,19 +471,19 @@ describe Autobahn do
   describe 'Creating a transport system' do
     context 'when inquiring about existence' do
       it 'can tell that a transport system exists' do
-        ts = Autobahn.transport_system(api_uri, exchange_name)
+        ts = create_transport_system(exchange_name)
         ts.exists?.should be_true
       end
 
       it 'can tell that a transport system does not exist' do
-        ts = Autobahn.transport_system(api_uri, 'bogus_name')
+        ts = create_transport_system('bogus_name')
         ts.exists?.should be_false
       end
     end
 
     context 'when creating a transport system' do
       before do
-        @stuff_ts = Autobahn.transport_system(api_uri, 'stuff')
+        @stuff_ts = create_transport_system('stuff')
         @stuff_ts.create!
       end
 
@@ -524,7 +531,7 @@ describe Autobahn do
     context 'when creating a transport system with HA' do
       it 'creates HA mirrored on all nodes when :ha is :all' do
         pending
-        ha_ts = Autobahn.transport_system(api_uri, 'stuff')
+        ha_ts = create_transport_system('stuff')
         begin
           ha_ts.create!(:ha => :all)
           queues = ha_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }
@@ -538,7 +545,7 @@ describe Autobahn do
 
       it 'creates HA mirrored on N nodes when :ha is N' do
         pending
-        ha_ts = Autobahn.transport_system(api_uri, 'stuff')
+        ha_ts = create_transport_system('stuff')
         begin
           ha_ts.create!(:ha => 2)
           queues = ha_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }
@@ -554,7 +561,7 @@ describe Autobahn do
 
     context 'when creating a transport system with options' do
       before do
-        @stuff_ts = Autobahn.transport_system(api_uri, 'stuff')
+        @stuff_ts = create_transport_system('stuff')
         @stuff_ts.create!(
           :queues_per_node => 2, 
           :routing_keys_per_queue => 4,
@@ -595,7 +602,7 @@ describe Autobahn do
       end
 
       it 'zero fills with enough zeroes' do
-        ts = Autobahn.transport_system(api_uri, 'more_stuff')
+        ts = create_transport_system('more_stuff')
         ts.create!(:queues_per_node => 40)
         begin
           queue_names = ts.cluster.queues.map { |q| q['name'] }.select { |n| n.start_with?('more_stuff_') }
@@ -627,7 +634,7 @@ describe Autobahn do
 
   describe 'Destroying a transport system' do
     before do
-      @stuff_ts = Autobahn.transport_system(api_uri, 'stuff')
+      @stuff_ts = create_transport_system('stuff')
       @stuff_ts.create!
       @stuff_ts.destroy!
     end
