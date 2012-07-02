@@ -8,9 +8,8 @@ module Autobahn
       @encoder_registry = encoder_registry
       @prefetch = options[:prefetch]
       @buffer_size = options[:buffer_size]
-      if @buffer_size && @buffer_size < @routing.size
-        raise ArgumentError, sprintf('Buffer size too small: %d (there are %d queues)', @buffer_size, @routing.size)
-      end
+      @strategy = options[:strategy] || DefaultConsumerStrategy.new
+      check_buffer_size!
       @demultiplexer = options[:demultiplexer]
       unless @demultiplexer
         if @buffer_size
@@ -20,7 +19,6 @@ module Autobahn
         end
       end
       @demultiplexer = @demultiplexer
-      @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @setup = Concurrency::AtomicBoolean.new(false)
       @deliver = Concurrency::AtomicBoolean.new(false)
       @subscribed = Concurrency::AtomicBoolean.new(false)
@@ -84,6 +82,15 @@ module Autobahn
     end
 
     private
+
+    def check_buffer_size!
+      if @buffer_size
+        subscription_count = @routing.size.times.select { |i| @strategy.subscribe?(i, @routing.size) }.size
+        if @buffer_size < subscription_count
+          raise ArgumentError, sprintf('Buffer size too small: %d (will subscribe to %d queues)', @buffer_size, subscription_count)
+        end
+      end
+    end
 
     def setup!
       if @setup.compare_and_set(false, true)
