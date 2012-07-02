@@ -19,7 +19,7 @@ module Autobahn
           @demultiplexer = BlockingQueueDemultiplexer.new
         end
       end
-      @demultiplexer = BatchAwareDemultiplexer.new(@demultiplexer)
+      @demultiplexer = @demultiplexer
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @setup = Concurrency::AtomicBoolean.new(false)
       @deliver = Concurrency::AtomicBoolean.new(false)
@@ -175,30 +175,21 @@ module Autobahn
     def deliver(*pair)
       headers, encoded_message = pair
       encoder = @encoder_registry[headers.content_type, :content_encoding => headers.content_encoding]
-      pair[1] = encoder.decode(encoded_message)
-      @demultiplexer.put(pair)
-    end
-  end
-
-  class BatchAwareDemultiplexer
-    def initialize(wrapped_demultiplexer)
-      @wrapped_demultiplexer = wrapped_demultiplexer
-    end
-
-    def put(pair)
-      if pair.last.is_a?(Array)
-        headers, messages = pair
-        batch_headers = BatchHeaders.new(headers, messages.size)
-        messages.each do |message|
-          @wrapped_demultiplexer.put([batch_headers, message])
+      decoded_message = encoder.decode(encoded_message)
+      if encoder.encodes_batches? && decoded_message.is_a?(Array)
+        if decoded_message.size == 1
+          pair[1] = decoded_message.first
+          @demultiplexer.put(pair)
+        else
+          batch_headers = BatchHeaders.new(headers, decoded_message.size)
+          decoded_message.each do |message|
+            @demultiplexer.put([batch_headers, message])
+          end
         end
       else
-        @wrapped_demultiplexer.put(pair)
+        pair[1] = decoded_message
+        @demultiplexer.put(pair)
       end
-    end
-
-    def take(*args)
-      @wrapped_demultiplexer.take(*args)
     end
   end
 
