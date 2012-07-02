@@ -7,18 +7,10 @@ module Autobahn
       @connections = connections
       @encoder_registry = encoder_registry
       @prefetch = options[:prefetch]
-      @buffer_size = options[:buffer_size]
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
+      @buffer_size = options[:buffer_size]
       check_buffer_size!
-      @demultiplexer = options[:demultiplexer]
-      unless @demultiplexer
-        if @buffer_size
-          @demultiplexer = BlockingQueueDemultiplexer.new(@buffer_size)
-        else
-          @demultiplexer = BlockingQueueDemultiplexer.new
-        end
-      end
-      @demultiplexer = @demultiplexer
+      @demultiplexer = options[:demultiplexer] || create_demultiplexer
       @setup = Concurrency::AtomicBoolean.new(false)
       @deliver = Concurrency::AtomicBoolean.new(false)
       @subscribed = Concurrency::AtomicBoolean.new(false)
@@ -115,6 +107,14 @@ module Autobahn
 
     def channels_by_consumer_tag
       @channels_by_consumer_tag ||= Hash[@subscriptions.map { |s| [s.consumer_tag, s.channel] }]
+    end
+
+    def create_demultiplexer
+      if @buffer_size
+        BlockingQueueDemultiplexer.new(@buffer_size)
+      else
+        BlockingQueueDemultiplexer.new
+      end
     end
 
     def create_subscriptions
