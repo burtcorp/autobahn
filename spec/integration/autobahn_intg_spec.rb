@@ -108,14 +108,14 @@ describe Autobahn do
         publisher = @encoded_transport_system.publisher
         publisher.publish({'hello' => 'world'})
         await_delivery
-        @queues.map { |q| h, m = q.get; m }.compact.first.should == '{"hello":"world"}'
+        @queues.map { |q| h, m = q.get; m }.compact.first.should == '[{"hello":"world"}]'
       end
     end
 
     context 'with compressed messages' do
       before do
-        encoder = Autobahn::GzipEncoder.new(Autobahn::JsonEncoder.new)
-        options = {:encoder => encoder}
+        @encoder = Autobahn::GzipEncoder.new(Autobahn::JsonEncoder.new)
+        options = {:encoder => @encoder}
         @compressed_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
         publisher = @compressed_transport_system.publisher
         publisher.publish({'hello' => 'world'})
@@ -127,9 +127,8 @@ describe Autobahn do
       end
 
       it 'uses the provided encoder to also compress messages' do
-        compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 0, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
         actual_message = @queues.map { |q| h, m = q.get; m }.compact.first
-        actual_message.should == compressed_message
+        actual_message.should == @encoder.encode([{'hello' => 'world'}])
       end
 
       it 'sets the content-encoding header' do
@@ -143,7 +142,7 @@ describe Autobahn do
 
     context 'with custom strategies' do
       it 'uses the provided strategy to select routing keys' do
-        strategy = Autobahn::PropertyGroupingPublisherStrategy.new('genus', :hash => :crc32)
+        strategy = Autobahn::PropertyGroupingPublisherStrategy.new('genus')
         publisher = @transport_system.publisher(:strategy => strategy, :encoder => Autobahn::JsonEncoder.new)
         publisher.publish('name' => 'Common chimpanzee',      'species' => 'Pan troglodytes',  'genus' => 'Pan')
         publisher.publish('name' => 'Bonobo',                 'species' => 'Pan paniscus',     'genus' => 'Pan')
@@ -163,7 +162,10 @@ describe Autobahn do
         @batch_timeout = 1
         options = {
           :encoder => @encoder,
-          :batch => {:size => @batch_size, :timeout => @batch_timeout}
+          :batch => {
+            :size => @batch_size,
+            :timeout => @batch_timeout
+          }
         }
         @batching_transport_system = Autobahn.transport_system(api_uri, exchange_name, options)
         @publisher = @batching_transport_system.publisher
@@ -202,7 +204,7 @@ describe Autobahn do
       end
 
       it 'respects routing when sending batches' do
-        publisher = @batching_transport_system.publisher(:strategy => Autobahn::PropertyGroupingPublisherStrategy.new('id', :hash => :crc32))
+        publisher = @batching_transport_system.publisher(:strategy => Autobahn::PropertyGroupingPublisherStrategy.new('id'))
         ('A'..'Z').each do |id|
           publisher.publish('id' => id)
         end

@@ -17,7 +17,6 @@ module Autobahn
   class PropertyGroupingPublisherStrategy
     def initialize(property, options={})
       @property = property
-      @hash = options[:hash]
     end
 
     def introspective?
@@ -25,7 +24,8 @@ module Autobahn
     end
 
     def select_routing_key(routing_keys, message)
-      routing_keys[Zlib.crc32(message[@property]) % routing_keys.size]
+      h = Zlib.crc32(message[@property].to_s)
+      routing_keys[h % routing_keys.size]
     end
   end
 end

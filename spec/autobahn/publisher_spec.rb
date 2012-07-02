@@ -8,6 +8,13 @@ module Autobahn
         {'stuff_queue_00' => {:routing_keys => %w[rk_00], :node => 'node_00'}}
       end
 
+      let :complex_routing do
+        {
+          'stuff_queue_00' => {:routing_keys => %w[rk_00 rk_01], :node => 'node_00'},
+          'stuff_queue_01' => {:routing_keys => %w[rk_02 rk_03], :node => 'node_01'}
+        }
+      end
+
       let :exchange do
         double(:exchange)
       end
@@ -24,35 +31,83 @@ module Autobahn
         end
       end
 
-      let :connections do
+      let :single_connection do
         {'node_00' => connection}
+      end
+
+      let :multiple_connections do
+        {'node_00' => connection, 'node_01' => connection}
       end
 
       let :encoder do
         double(:encoder).tap do |e|
           e.stub(:properties).and_return(:content_type => 'application/x-nonsense')
+          e.stub(:encodes_batches?).and_return(false)
           e.stub(:encode).and_return(nil)
         end
       end
 
-      before do
-        @publisher = described_class.new('stuff', simple_routing, connections, encoder)
+      context 'when sending single messages' do
+        before do
+          @publisher = described_class.new('stuff', simple_routing, single_connection, encoder)
+        end
+
+        it 'publishes to the exchange' do
+          exchange.should_receive(:publish)
+          @publisher.publish('hello world')
+        end
+
+        it 'uses the encoder to encode messages' do
+          encoder.stub(:encode).with('hello world').and_return('LULZ')
+          exchange.should_receive(:publish).with('LULZ', anything)
+          @publisher.publish('hello world')
+        end
+
+        it 'sets the content-type header to the value given by the encoder' do
+          exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense'}))
+          @publisher.publish('hello world')
+        end
       end
 
-      it 'publishes to the exchange' do
-        exchange.should_receive(:publish)
-        @publisher.publish('hello world')
-      end
+      context 'when batching' do
+        context 'with a non-introspective strategy' do
+          before do
+            options = {
+              :batch => {:size => 3},
+              :strategy => RandomPublisherStrategy.new # this is the default, but it doesn't hurt to be explicit
+            }
+            @publisher = described_class.new('stuff', complex_routing, multiple_connections, JsonEncoder.new, options)
+          end
 
-      it 'uses the encoder to encode messages' do
-        encoder.stub(:encode).and_return('LULZ')
-        exchange.should_receive(:publish).with('LULZ', anything)
-        @publisher.publish('hello world')
-      end
+          it 'publishes on the third message' do
+            exchange.should_receive(:publish).with(%([{"foo":1},{"foo":2},{"foo":3}]), anything)
+            @publisher.publish({'foo' => 1})
+            @publisher.publish({'foo' => 2})
+            @publisher.publish({'foo' => 3})
+          end
+        end
 
-      it 'sets the content-type header to the value given by the encoder' do
-        exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense'}))
-        @publisher.publish('hello world')
+        context 'with an introspective strategy' do
+          before do
+            options = {
+              :batch => {:size => 3},
+              :strategy => PropertyGroupingPublisherStrategy.new('foo')
+            }
+            @publisher = described_class.new('stuff', complex_routing, multiple_connections, JsonEncoder.new, options)
+          end
+
+          it 'publishes on the third message to the same routing key when using an introspective strategy' do
+            exchange.should_receive(:publish).with(%([{"foo":1},{"foo":3},{"foo":8}]), hash_including(:routing_key => 'rk_03'))
+            @publisher.publish({'foo' => 1})
+            @publisher.publish({'foo' => 2})
+            @publisher.publish({'foo' => 3})
+            @publisher.publish({'foo' => 4})
+            @publisher.publish({'foo' => 5})
+            @publisher.publish({'foo' => 6})
+            @publisher.publish({'foo' => 7})
+            @publisher.publish({'foo' => 8})
+          end
+        end
       end
     end
   end
