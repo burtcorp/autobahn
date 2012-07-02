@@ -75,7 +75,6 @@ module Autobahn
       setup!
       connect!
       consumer = Consumer.new(@routing, @connections, @encoder, options)
-      consumer = BatchConsumer.new(consumer, @batch_options) if @batch_options
       @consumers << consumer
       @consumers.last
     end

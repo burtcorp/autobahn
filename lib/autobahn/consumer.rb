@@ -19,6 +19,7 @@ module Autobahn
           @demultiplexer = BlockingQueueDemultiplexer.new
         end
       end
+      @demultiplexer = BatchAwareDemultiplexer.new(@demultiplexer)
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @setup = Concurrency::AtomicBoolean.new(false)
       @deliver = Concurrency::AtomicBoolean.new(false)
@@ -30,16 +31,13 @@ module Autobahn
       raise 'Subscriber already registered' unless @subscribed.compare_and_set(false, true)
       setup!
       mode = options[:mode] || :async
-      # TODO: this is a bit ugly, and is only here to support batching, 
-      #       this class shouldn't have to worry about that!
-      consumer = options[:consumer] || self 
       timeout = options[:timeout] || 1
       case mode
       when :async
         @deliver_pool = create_thread_pool(1)
-        @deliver_pool.execute { deliver(consumer, handler, timeout) }
+        @deliver_pool.execute { deliver(handler, timeout) }
       when :blocking
-        deliver(consumer, handler, timeout)
+        deliver(handler, timeout)
       else
         raise ArgumentError, "Not a valid subscription mode: #{mode}"
       end
@@ -101,9 +99,9 @@ module Autobahn
       end
     end
 
-    def deliver(consumer, handler, timeout)
+    def deliver(handler, timeout)
       begin
-        headers, message = consumer.next(timeout)
+        headers, message = self.next(timeout)
         handler.call(headers, message) if headers
       end while @deliver.get
     end
@@ -137,57 +135,6 @@ module Autobahn
     def create_thread_pool(size)
       thread_factory = Concurrency::NamingDaemonThreadFactory.new('autobahn')
       Concurrency::Executors.new_fixed_thread_pool(size, thread_factory)
-    end
-  end
-
-  class BatchConsumer
-    def initialize(consumer, batcher)
-      @consumer = consumer
-      @batcher = batcher
-      @buffer = Concurrency::LinkedBlockingQueue.new
-    end
-
-    def setup!
-      @consumer.setup!
-    end
-
-    def subscribe(options={}, &handler)
-      @consumer.subscribe(options.merge(:consumer => self), &handler)
-    end
-
-    def next(timeout=nil)
-      pair = @buffer.poll
-      unless pair
-        pair = @consumer.next(timeout)
-        if pair
-          headers, messages = pair
-          batch_headers = BatchHeaders.new(headers, messages.size)
-          first_message = messages.shift
-          messages.each do |message|
-            @buffer.add([batch_headers, message])
-          end
-          return batch_headers, first_message
-        end
-      end
-      return pair
-    end
-
-    def ack(consumer_tag, delivery_tag, options={})
-      raise 'Not yet possible when batching'
-      @consumer.ack(consumer_tag, delivery_tag, options)
-    end
-
-    def reject(consumer_tag, delivery_tag, options={})
-      raise 'Not yet possible when batching'
-      @consumer.reject(consumer_tag, delivery_tag, options)
-    end
-
-    def unsubscribe!
-      @consumer.unsubscribe!
-    end
-
-    def disconnect!(*args)
-      @consumer.disconnect!(*args)
     end
   end
 
@@ -230,6 +177,28 @@ module Autobahn
       @demultiplexer.put(pair)
     rescue Concurrency::InterruptedException => e
       # this means we blocked on #put when the thread pool shut down
+    end
+  end
+
+  class BatchAwareDemultiplexer
+    def initialize(wrapped_demultiplexer)
+      @wrapped_demultiplexer = wrapped_demultiplexer
+    end
+
+    def put(pair)
+      if pair.last.is_a?(Array)
+        headers, messages = pair
+        batch_headers = BatchHeaders.new(headers, messages.size)
+        messages.each do |message|
+          @wrapped_demultiplexer.put([batch_headers, message])
+        end
+      else
+        @wrapped_demultiplexer.put(pair)
+      end
+    end
+
+    def take(*args)
+      @wrapped_demultiplexer.take(*args)
     end
   end
 
