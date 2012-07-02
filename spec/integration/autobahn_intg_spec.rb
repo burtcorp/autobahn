@@ -514,6 +514,42 @@ describe Autobahn do
         queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }
         queues.map { |q| q['durable'] }.uniq.should == [true]
       end
+
+      it 'does not create HA queues by default' do
+        queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }
+        queues.map { |q| q['arguments'] }.uniq.should == [{}]
+      end
+    end
+
+    context 'when creating a transport system with HA' do
+      it 'creates HA mirrored on all nodes when :ha is :all' do
+        pending
+        ha_ts = Autobahn.transport_system(api_uri, 'stuff')
+        begin
+          ha_ts.create!(:ha => :all)
+          queues = ha_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }
+          queues.map { |q| q['arguments'] }.uniq.should == [{'x-ha-policy' => 'all'}]
+        ensure
+          ha_ts.disconnect!
+          @connection.create_channel.exchange_delete('stuff') rescue nil
+          ha_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }.each { |q| @connection.create_channel.queue_delete(q['name']) rescue nil }
+        end
+      end
+
+      it 'creates HA mirrored on N nodes when :ha is N' do
+        pending
+        ha_ts = Autobahn.transport_system(api_uri, 'stuff')
+        begin
+          ha_ts.create!(:ha => 2)
+          queues = ha_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }
+          queues.map { |q| q['arguments'] }.uniq.should == [{'x-ha-policy' => 'nodes'}]
+          p queues
+        ensure
+          ha_ts.disconnect!
+          @connection.create_channel.exchange_delete('stuff') rescue nil
+          ha_ts.cluster.queues.select { |q| q['name'].start_with?('stuff_') }.each { |q| @connection.create_channel.queue_delete(q['name']) rescue nil }
+        end
+      end
     end
 
     context 'when creating a transport system with options' do
