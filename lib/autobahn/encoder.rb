@@ -210,49 +210,12 @@ module Autobahn
 
       content_encoding 'lzf'
 
-      def initialize(*args)
-        super
-        p :create_lzf
-        # puts *caller
-        @out_uncompressed_sizes = []
-        @out_compressed_sizes = []
-        @in_uncompressed_sizes = []
-        @in_compressed_sizes = []
-      end
-
       def encode(obj)
-        uncompressed = @wrapped_encoder.encode(obj)
-        compressed = String.from_java_bytes(LZFEncoder.encode(uncompressed.to_java_bytes))
-        begin
-          @out_uncompressed_sizes << uncompressed.bytesize
-          @out_compressed_sizes << compressed.bytesize
-          if @out_uncompressed_sizes.size == 1000
-            $stderr.puts(sprintf('Average compression out: %.3f', @out_compressed_sizes.reduce(:+)/@out_uncompressed_sizes.reduce(:+).to_f))
-            @out_uncompressed_sizes = []
-            @out_compressed_sizes = []
-          end
-        rescue
-        end
-        compressed
+        String.from_java_bytes(LZFEncoder.encode(@wrapped_encoder.encode(obj).to_java_bytes))
       end
 
       def decode(str)
-        p :lzf_decode
-        compressed = str
-        uncompressed = String.from_java_bytes(LZFDecoder.decode(compressed.to_java_bytes))
-        begin
-          @in_uncompressed_sizes << uncompressed.bytesize
-          @in_compressed_sizes << compressed.bytesize
-          if @in_uncompressed_sizes.size == 1000
-            $stderr.puts(sprintf('Average compression in: %.3f', @in_compressed_sizes.reduce(:+)/@in_uncompressed_sizes.reduce(:+).to_f))
-            @in_uncompressed_sizes = []
-            @in_compressed_sizes = []
-          end
-          p @in_uncompressed_sizes
-          p @in_compressed_sizes
-        rescue
-        end
-        @wrapped_encoder.decode(uncompressed)
+        @wrapped_encoder.decode(String.from_java_bytes(LZFDecoder.decode(str.to_java_bytes)))
       end
     end
   rescue LoadError
