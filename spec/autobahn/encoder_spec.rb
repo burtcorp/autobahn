@@ -23,6 +23,12 @@ module Autobahn
       it 'returns nil if no encoder for the content encoding could be found, even if an encoder for the content type exists' do
         Encoder['application/json', :content_encoding => 'magic'].should be_nil
       end
+
+      it 'caches encoders' do
+        instance1 = Encoder['application/json', :content_encoding => 'gzip']
+        instance2 = Encoder['application/json', :content_encoding => 'gzip']
+        instance1.should equal(instance2)
+      end
     end
   end
 
