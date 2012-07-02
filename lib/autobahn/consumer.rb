@@ -175,8 +175,6 @@ module Autobahn
     def deliver(*pair)
       pair[1] = @encoder.decode(pair[1])
       @demultiplexer.put(pair)
-    rescue Concurrency::InterruptedException => e
-      # this means we blocked on #put when the thread pool shut down
     end
   end
 
