@@ -194,7 +194,10 @@ module Autobahn
       encoder = @encoder_registry[headers.content_type, :content_encoding => headers.content_encoding]
       decoded_message = encoder.decode(encoded_message)
       if encoder.encodes_batches? && decoded_message.is_a?(Array)
-        if decoded_message.size == 1
+        if decoded_message.size == 0
+          # Empty batch - really? O.o
+          headers.ack
+        elsif decoded_message.size == 1
           pair[1] = decoded_message.first
           @demultiplexer.put(pair)
         else
