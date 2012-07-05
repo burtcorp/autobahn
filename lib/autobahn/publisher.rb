@@ -10,6 +10,8 @@ module Autobahn
       @strategy = options[:strategy] || RandomPublisherStrategy.new
       @batch_options = options[:batch] || {:size => 1}
       @logger = options[:logger] || NullLogger.new
+      @publish_properties = options[:publish] || {}
+      @publish_properties[:persistent] = true if options[:persistent]
       @batch_buffers = Hash.new { |h, k| h[k] = Concurrency::LinkedBlockingDeque.new }
     end
 
@@ -105,7 +107,7 @@ module Autobahn
       rk ||= @strategy.select_routing_key(routing_keys, message)
       ex = exchanges_by_routing_key[rk]
       em = @encoder.encode(message)
-      op = {:routing_key => rk, :properties => @encoder.properties}
+      op = {:routing_key => rk, :properties => @publish_properties.merge(@encoder.properties)}
       ex.publish(em, op)
     end
   end

@@ -67,6 +67,18 @@ module Autobahn
           exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense'}))
           @publisher.publish('hello world')
         end
+
+        it 'sets persistent flag for messages' do
+          publisher = described_class.new('stuff', simple_routing, single_connection, encoder, {:publish => {:persistent => true}})
+          exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense', :persistent => true}))
+          publisher.publish('hello world')
+        end
+
+        it 'sets provides simple interface for setting persistent property' do
+          publisher = described_class.new('stuff', simple_routing, single_connection, encoder, {:persistent => true})
+          exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense', :persistent => true}))
+          publisher.publish('hello world')
+        end
       end
 
       context 'when batching' do
