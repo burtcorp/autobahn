@@ -169,10 +169,10 @@ module Autobahn
   end
 
   class GzipEncoder < Encoder
-    import 'java.util.zip.GZIPOutputStream'
-    import 'java.util.zip.GZIPInputStream'
-    import 'java.io.ByteArrayOutputStream'
-    import 'java.io.ByteArrayInputStream'
+    java_import 'java.util.zip.GZIPOutputStream'
+    java_import 'java.util.zip.GZIPInputStream'
+    java_import 'java.io.ByteArrayOutputStream'
+    java_import 'java.io.ByteArrayInputStream'
 
     content_encoding 'gzip'
 
@@ -205,8 +205,8 @@ module Autobahn
     require 'ning-compress-jars'
 
     class LzfEncoder < Encoder
-      import 'com.ning.compress.lzf.LZFEncoder'
-      import 'com.ning.compress.lzf.LZFDecoder'
+      java_import 'com.ning.compress.lzf.LZFEncoder'
+      java_import 'com.ning.compress.lzf.LZFDecoder'
 
       content_encoding 'lzf'
 

@@ -5,18 +5,18 @@ require 'java'
 
 module Autobahn
   module Concurrency
-    import 'java.lang.Thread'
-    import 'java.lang.InterruptedException'
-    import 'java.util.concurrent.atomic.AtomicInteger'
-    import 'java.util.concurrent.atomic.AtomicBoolean'
-    import 'java.util.concurrent.ThreadFactory'
-    import 'java.util.concurrent.Executors'
-    import 'java.util.concurrent.LinkedBlockingQueue'
-    import 'java.util.concurrent.LinkedBlockingDeque'
-    import 'java.util.concurrent.ArrayBlockingQueue'
-    import 'java.util.concurrent.TimeUnit'
-    import 'java.util.concurrent.CountDownLatch'
-    import 'java.util.concurrent.locks.ReentrantLock'
+    java_import 'java.lang.Thread'
+    java_import 'java.lang.InterruptedException'
+    java_import 'java.util.concurrent.atomic.AtomicInteger'
+    java_import 'java.util.concurrent.atomic.AtomicBoolean'
+    java_import 'java.util.concurrent.ThreadFactory'
+    java_import 'java.util.concurrent.Executors'
+    java_import 'java.util.concurrent.LinkedBlockingQueue'
+    java_import 'java.util.concurrent.LinkedBlockingDeque'
+    java_import 'java.util.concurrent.ArrayBlockingQueue'
+    java_import 'java.util.concurrent.TimeUnit'
+    java_import 'java.util.concurrent.CountDownLatch'
+    java_import 'java.util.concurrent.locks.ReentrantLock'
 
     class NamingDaemonThreadFactory
       include ThreadFactory
