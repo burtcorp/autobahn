@@ -1,5 +1,8 @@
 # encoding: utf-8
 
+require 'java'
+
+
 module Autobahn
   def self.transport_system(*args)
     TransportSystem.new(*args)

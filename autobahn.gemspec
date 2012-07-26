@@ -22,6 +22,6 @@ Gem::Specification.new do |s|
   s.add_dependency 'jruby-openssl'
   s.add_dependency 'json'
 
-  s.files         = Dir['lib/**/*.rb']
+  s.files         = Dir['lib/**/*.rb'] + Dir['lib/**/*.jar']
   s.require_paths = %w(lib)
 end

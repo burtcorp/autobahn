@@ -67,6 +67,12 @@ module Autobahn
       gzip_encoder.decode(gzip_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
     end
 
+    describe '#encode' do
+      it 'returns a binary string' do
+        gzip_encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
+      end
+    end
+
     describe '#properties' do
       it 'inherits its content type from the encoder it wraps' do
         gzip_encoder.properties[:content_type].should == wrapped_encoder.properties[:content_type]
@@ -89,6 +95,38 @@ module Autobahn
 
     it 'compresses and decompresses data' do
       lzf_encoder.decode(lzf_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
+    end
+
+    describe '#encode' do
+      it 'returns a binary string' do
+        lzf_encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
+      end
+    end
+  end
+
+  describe MsgPackLzfEncoder do
+    let :encoder do
+      MsgPackLzfEncoder.new
+    end
+
+    it 'compresses and decompresses data' do
+      encoder.decode(encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
+    end
+
+    describe '#encode' do
+      it 'returns a binary string' do
+        encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
+      end
+    end
+
+    describe '#properties' do
+      it 'specifies the content type' do
+        encoder.properties[:content_type].should == 'application/msgpack'
+      end
+
+      it 'specifies the content encoding' do
+        encoder.properties[:content_encoding].should == 'lzf'
+      end
     end
   end
 end
