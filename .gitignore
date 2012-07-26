@@ -1,3 +1,4 @@
 *.gem
 /pkg
 /ext/build
+/lib/autobahn*.jar
