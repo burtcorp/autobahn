@@ -7,13 +7,13 @@ require 'autobahn/version'
 require 'ant'
 
 
-task :release do
+task :release => ['build:clean', 'build:jars'] do
   version_string = "v#{Autobahn::VERSION}"
   unless %x(git tag -l).include?(version_string)
     system %(git tag -a #{version_string} -m #{version_string})
   end
   system %(git push && git push --tags)
-  system %(gem build autobahn.gemspec && gem inabox autobahn-*.gem && mv autobahn-*.gem pkg)
+  system %(gem build autobahn.gemspec && gem inabox autobahn-*.gem && mv autobahn-*.gem pkg))
 end
 
 namespace :build do
@@ -50,8 +50,8 @@ namespace :build do
   end
 
   task :clean do
-    rm_r build_dir
-    rm 'lib/autobahn*.jar'
+    rm_rf build_dir
+    rm Dir['lib/autobahn*.jar']
   end
 end
 
