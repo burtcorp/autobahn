@@ -91,4 +91,24 @@ module Autobahn
       lzf_encoder.decode(lzf_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
     end
   end
+
+  describe MsgPackLzfEncoder do
+    let :encoder do
+      MsgPackLzfEncoder.new
+    end
+
+    it 'compresses and decompresses data' do
+      encoder.decode(encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
+    end
+
+    describe '#properties' do
+      it 'specifies the content type' do
+        encoder.properties[:content_type].should == 'application/msgpack'
+      end
+
+      it 'specifies the content encoding' do
+        encoder.properties[:content_encoding].should == 'lzf'
+      end
+    end
+  end
 end

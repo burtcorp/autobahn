@@ -220,4 +220,8 @@ module Autobahn
     end
   rescue LoadError
   end
+
+  if (defined? MsgPackEncoder) && (defined? LzfEncoder)
+    require 'autobahn_msgpack_lzf'
+  end
 end
