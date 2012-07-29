@@ -12,10 +12,20 @@ messages = DATA.readlines.map { |line| JSON.parse(line) }
 msgpack_encoder = Autobahn::MsgPackEncoder.new
 lzf_encoder = Autobahn::LzfEncoder.new(msgpack_encoder)
 msgpack_lzf_encoder = Autobahn::MsgPackLzfEncoder.new
+msgpack_lzf_symbol_encoder = Autobahn::MsgPackLzfEncoder.new(:symbolize_keys => true)
 
-Benchmark.bm(30) do |x|
-  x.report('MsgPackEncoder + LzfEncoder') { n.times { messages.each { |m| lzf_encoder.decode(lzf_encoder.encode(m)) } } }
-  x.report('MsgPackLzfEncoder') { n.times { messages.each { |m| msgpack_lzf_encoder.decode(msgpack_lzf_encoder.encode(m)) } } }
+def encode_decode(encoder, messages, n)
+  n.times do
+    messages.each do |m|
+      encoder.decode(encoder.encode(m))
+    end
+  end
+end
+
+Benchmark.bm(35) do |x|
+  x.report('MsgPackEncoder + LzfEncoder')        { encode_decode(lzf_encoder, messages, n) }
+  x.report('MsgPackLzfEncoder')                  { encode_decode(msgpack_lzf_encoder, messages, n) }
+  x.report('MsgPackLzfEncoder + symbolize_keys') { encode_decode(msgpack_lzf_symbol_encoder, messages, n) }
 end
 
 __END__
