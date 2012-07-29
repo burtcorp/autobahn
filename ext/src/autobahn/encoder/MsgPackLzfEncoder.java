@@ -30,43 +30,39 @@ import com.ning.compress.lzf.LZFDecoder;
 @JRubyClass(name="Autobahn::MsgPackLzfEncoder")
 public class MsgPackLzfEncoder extends RubyObject {
   private final MessagePack msgPack;
+  private final RubyObjectPacker packer;
   private final RubyObjectUnpacker unpacker;
   private final RubyHash properties;
+  private RubyHash unpackerOptions;
 
   public MsgPackLzfEncoder(Ruby runtime, RubyClass type) {
     super(runtime, type);
     this.msgPack = new MessagePack();
+    this.packer = new RubyObjectPacker(msgPack);
     this.unpacker = new RubyObjectUnpacker(msgPack);
     this.properties = RubyHash.newHash(runtime);
     this.properties.put(runtime.newSymbol("content_type"), runtime.newString("application/msgpack"));
     this.properties.put(runtime.newSymbol("content_encoding"), runtime.newString("lzf"));
   }
 
-  @JRubyMethod(name = "initialize", visibility = PRIVATE)
-  public IRubyObject initialize(ThreadContext ctx) {
+  @JRubyMethod(name = "initialize", optional = 1, visibility = PRIVATE)
+  public IRubyObject initialize(ThreadContext ctx, IRubyObject[] args) {
+    unpackerOptions = (args.length == 1 && args[0] instanceof RubyHash) ? (RubyHash) args[0] : null;
     return this;
-  }
-
-  public byte[] encodeRaw(IRubyObject obj) throws IOException {
-    // TODO: move into msgpack-jruby, make a method that returns byte[]
-    BufferPacker bufferedPacker = msgPack.createBufferPacker();
-    Packer packer = new RubyObjectPacker(msgPack, bufferedPacker).write(obj);
-    byte[] packed = bufferedPacker.toByteArray();
-    byte[] compressed = LZFEncoder.encode(packed);
-    return compressed;
   }
 
   @JRubyMethod(required = 1)
   public IRubyObject encode(ThreadContext ctx, IRubyObject obj) throws IOException {
-    return RubyString.newString(ctx.getRuntime(), encodeRaw(obj));
+    byte[] packed = packer.packRaw(obj);
+    byte[] compressed = LZFEncoder.encode(packed);
+    return RubyString.newString(ctx.getRuntime(), compressed);
   }
 
   @JRubyMethod(required = 1)
   public IRubyObject decode(ThreadContext ctx, IRubyObject str) throws IOException {
-    // TODO: move into msgpack-jruby, make a method that takes byte[]
     byte[] compressed = str.asString().getBytes();
     byte[] packed = LZFDecoder.decode(compressed);
-    return unpacker.unpack(ctx.getRuntime(), packed);
+    return unpacker.unpack(ctx.getRuntime(), packed, unpackerOptions);
   }
 
   @JRubyMethod(name = "properties")
