@@ -113,6 +113,10 @@ module Autobahn
       encoder.decode(encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
     end
 
+    it 'encodes batches' do
+      encoder.encodes_batches?.should be_true
+    end
+
     describe '#encode' do
       it 'returns a binary string' do
         encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY

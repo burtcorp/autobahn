@@ -74,6 +74,11 @@ public class MsgPackLzfEncoder extends RubyObject {
     return properties;
   }
 
+  @JRubyMethod(name = "encodes_batches?")
+  public IRubyObject getEncodesBatches(ThreadContext ctx) {
+    return ctx.getRuntime().getTrue();
+  }
+
   public static final ObjectAllocator ALLOCATOR = new ObjectAllocator() {
     public IRubyObject allocate(Ruby runtime, RubyClass type) {
       return new MsgPackLzfEncoder(runtime, type);
