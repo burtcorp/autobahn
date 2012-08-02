@@ -9,6 +9,7 @@ module Autobahn
       @prefetch = options[:prefetch]
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @buffer_size = options[:buffer_size]
+      @default_encoder = options[:encoder]
       check_buffer_size!
       @demultiplexer = options[:demultiplexer] || BlockingQueueDemultiplexer.new(:buffer_size => @buffer_size)
       @logger = options[:logger] || NullLogger.new
@@ -108,7 +109,7 @@ module Autobahn
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
             logger.info { sprintf('Subscribing to %s with prefetch %d', subscription.queue_name, @prefetch || 0) }
-            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer)
+            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer, @default_encoder)
             subscription.start(queue_consumer)
           end
           @deliver.set(true)
@@ -183,15 +184,22 @@ module Autobahn
   end
 
   class QueueingConsumer < HotBunnies::Queue::BaseConsumer
-    def initialize(channel, encoder_registry, demultiplexer)
+    def initialize(channel, encoder_registry, demultiplexer, default_encoder = nil)
       super(channel)
       @encoder_registry = encoder_registry
       @demultiplexer = demultiplexer
+      @default_encoder = default_encoder
     end
 
     def deliver(*pair)
       headers, encoded_message = pair
-      encoder = @encoder_registry[headers.content_type, :content_encoding => headers.content_encoding]
+      encoder = begin
+        if @default_encoder && @default_encoder.properties[:content_type] == headers.content_type && @default_encoder.properties[:content_encoding] == headers.content_encoding
+          @default_encoder
+        else
+          @encoder_registry[headers.content_type, :content_encoding => headers.content_encoding]
+        end
+      end
       decoded_message = encoder.decode(encoded_message)
       if encoder.encodes_batches? && decoded_message.is_a?(Array)
         if decoded_message.size == 0

@@ -77,7 +77,7 @@ module Autobahn
     def consumer(options={})
       setup!
       connect!
-      options = {:logger => @logger}.merge(options)
+      options = {:logger => @logger, :encoder => @encoder}.merge(options)
       consumer = Consumer.new(@routing, @connections, Encoder, options)
       @consumers << consumer
       @consumers.last
