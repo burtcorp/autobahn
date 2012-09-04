@@ -17,6 +17,16 @@ module Autobahn
     end
   end
 
+  class SingleConsumerStrategy
+    def initialize(subscribe_index)
+      @subscribe_index = subscribe_index
+    end
+
+    def subscribe?(index, total_count)
+      index == @subscribe_index
+    end
+  end
+
   class DefaultConsumerStrategy
     def subscribe?(index, total_count)
       true

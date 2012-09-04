@@ -30,4 +30,18 @@ module Autobahn
       end
     end
   end
+  describe SingleConsumerStrategy do
+    it 'chooses only the Nth index' do
+      strategy = described_class.new(1)
+      strategy.subscribe?(0,3).should be_false
+      strategy.subscribe?(1,3).should be_true
+      strategy.subscribe?(2,3).should be_false
+    end
+    it 'disregards the total_count' do
+      strategy = described_class.new(1)
+      strategy.subscribe?(0,nil).should be_false
+      strategy.subscribe?(1,nil).should be_true
+      strategy.subscribe?(2,nil).should be_false
+    end
+  end
 end
