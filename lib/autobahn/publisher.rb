@@ -12,7 +12,7 @@ module Autobahn
       @logger = options[:logger] || NullLogger.new
       @publish_properties = options[:publish] || {}
       @publish_properties[:persistent] = true if options[:persistent]
-      @batch_buffers = Hash.new { |h, k| h[k] = Concurrency::LinkedBlockingDeque.new }
+      @batch_buffers = Hash[routing_keys.map { |rk| [rk,Concurrency::LinkedBlockingDeque.new] }].merge(nil => Concurrency::LinkedBlockingDeque.new)
     end
 
     def start!
