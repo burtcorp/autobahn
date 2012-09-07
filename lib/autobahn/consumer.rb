@@ -9,7 +9,8 @@ module Autobahn
       @prefetch = options[:prefetch]
       @strategy = options[:strategy] || DefaultConsumerStrategy.new
       @buffer_size = options[:buffer_size]
-      @default_encoder = options[:encoder]
+      @preferred_decoder = options[:preferred_decoder]
+      @fallback_decoder = options[:fallback_decoder]
       check_buffer_size!
       @demultiplexer = options[:demultiplexer] || BlockingQueueDemultiplexer.new(:buffer_size => @buffer_size)
       @logger = options[:logger] || NullLogger.new
@@ -109,7 +110,7 @@ module Autobahn
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|
             logger.info { sprintf('Subscribing to %s with prefetch %d', subscription.queue_name, @prefetch || 0) }
-            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer, @default_encoder)
+            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer, :preferred_decoder => @preferred_decoder, :fallback_decoder => @fallback_decoder)
             subscription.start(queue_consumer)
           end
           @deliver.set(true)
@@ -173,35 +174,40 @@ module Autobahn
       @headers.reject(options)
     end
 
-    def responds_to?(name)
-      super unless @headers.responds_to?(name)
+    def respond_to?(name)
+      super unless @headers.respond_to?(name)
     end
 
     def method_missing(name, *args, &block)
-      super unless @headers.responds_to?(name)
-      @headers.method_missing?(name, *args, &block)
+      super unless @headers.respond_to?(name)
+      @headers.send(name, *args, &block)
     end
   end
 
   class QueueingConsumer < HotBunnies::Queue::BaseConsumer
-    def initialize(channel, encoder_registry, demultiplexer, default_encoder = nil)
+    def initialize(channel, encoder_registry, demultiplexer, options = {})
       super(channel)
       @encoder_registry = encoder_registry
       @demultiplexer = demultiplexer
-      @default_encoder = default_encoder
+      @preferred_decoder = options[:preferred_decoder]
+      @fallback_decoder = options[:fallback_decoder]
     end
 
     def deliver(*pair)
       headers, encoded_message = pair
-      encoder = begin
-        if @default_encoder && @default_encoder.properties[:content_type] == headers.content_type && @default_encoder.properties[:content_encoding] == headers.content_encoding
-          @default_encoder
+      decoder = begin
+        if @preferred_decoder && @preferred_decoder.properties[:content_type] == headers.content_type && @preferred_decoder.properties[:content_encoding] == headers.content_encoding
+          @preferred_decoder
+        elsif (decoder=@encoder_registry[headers.content_type, :content_encoding => headers.content_encoding])
+          decoder
+        elsif @fallback_decoder
+          @fallback_decoder
         else
-          @encoder_registry[headers.content_type, :content_encoding => headers.content_encoding]
+          raise UnknownEncodingError, "No available decoder for #{headers.content_type} and #{headers.content_encoding}"
         end
       end
-      decoded_message = encoder.decode(encoded_message)
-      if encoder.encodes_batches? && decoded_message.is_a?(Array)
+      decoded_message = decoder.decode(encoded_message)
+      if decoder.encodes_batches? && decoded_message.is_a?(Array)
         if decoded_message.size == 0
           # Empty batch - really? O.o
           headers.ack
@@ -219,6 +225,8 @@ module Autobahn
         @demultiplexer.put(pair)
       end
     end
+
+    class UnknownEncodingError < StandardError; end
   end
 
   class BlockingQueueDemultiplexer

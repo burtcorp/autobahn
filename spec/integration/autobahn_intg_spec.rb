@@ -342,6 +342,46 @@ describe Autobahn do
         h, m = consumer.next
         m.should == {'hello' => 'world'}
       end
+
+      it 'uses preferred_decoder when possible' do
+        @exchange.publish('message', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
+        await_delivery
+        preferred_decoder = double('Encoder')
+        preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
+        preferred_decoder.should_receive(:decode)
+        consumer = @encoded_transport_system.consumer(:preferred_decoder => preferred_decoder)
+        consumer.next
+      end
+
+      it "doesn't use preferred_decoder when content-type/encoding don't match" do
+        @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/json'})
+        await_delivery
+        preferred_decoder = double('Encoder')
+        preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
+        preferred_decoder.should_not_receive(:decode)
+        consumer = @encoded_transport_system.consumer(:preferred_decoder => preferred_decoder)
+        consumer.next
+      end
+
+      it 'uses fallback_decoder for unknown encodings' do
+        @exchange.publish('message', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
+        await_delivery
+        fallback_decoder = double('Encoder')
+        fallback_decoder.stub(:properties => {},:encodes_batches? => false)
+        fallback_decoder.should_receive(:decode)
+        consumer = @encoded_transport_system.consumer(:fallback_decoder => fallback_decoder)
+        consumer.next
+      end
+
+      it  "doesn't use fallback_decoder when encoder for content-type/encoding exist" do
+        @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/json'})
+        await_delivery
+        fallback_decoder = double('Encoder')
+        fallback_decoder.stub(:properties => {},:encodes_batches? => false)
+        fallback_decoder.should_not_receive(:decode)
+        consumer = @encoded_transport_system.consumer(:fallback_decoder => fallback_decoder)
+        consumer.next
+      end
     end
 
     context 'with compressed messages' do
