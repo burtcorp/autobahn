@@ -261,11 +261,11 @@ describe Autobahn do
       it 'subscribes to queues over connections to the node hosting the queue' do
         @consumer.subscribe { |headers, message| }
         queue_names.each do |queue_name|
-          queue_info = @transport_system.cluster.queue("%2F/#{queue_name}")
+          queue_info = @transport_system.cluster.queue("%2F/#{URI.encode(queue_name)}")
           queue_node = queue_info['node']
           consumers = queue_info['consumer_details'].reduce([]) do |acc, consumer_details|
             channel_name = consumer_details['channel_details']['name']
-            channel_info = @transport_system.cluster.channel(channel_name)
+            channel_info = @transport_system.cluster.channel(URI.encode(channel_name))
             acc << channel_info['node']
             acc
           end
@@ -278,7 +278,7 @@ describe Autobahn do
         @consumer = @transport_system.consumer(:strategy => Autobahn::SubsetConsumerStrategy.new(2, 3))
         @consumer.subscribe { |headers, message| }
         subscribed_queues = queue_names.reduce([]) do |acc, queue_name|
-          queue_info = @transport_system.cluster.queue("%2F/#{queue_name}")
+          queue_info = @transport_system.cluster.queue("%2F/#{URI.encode(queue_name)}")
           queue_node = queue_info['node']
           consumers = queue_info['consumer_details']
           acc << queue_name if consumers.size > 0

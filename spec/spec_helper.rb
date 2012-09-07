@@ -1,7 +1,7 @@
 require 'bundler/setup'
 require 'logger'
 require 'autobahn'
-
+require 'uri'
 
 module StubHelpers
   def stubs(*names)
