@@ -38,6 +38,13 @@ module Autobahn
       drain
     end
 
+    def broadcast(message)
+      routing_keys.each do |rk|
+        @batch_buffers[rk].add_last(message)
+      end
+      drain
+    end
+
     def flush!
       drain(true)
     end

@@ -3,49 +3,51 @@ require_relative '../spec_helper'
 
 module Autobahn
   describe Publisher do
-    describe '#publish' do
-      let :simple_routing do
-        {'stuff_queue_00' => {:routing_keys => %w[rk_00], :node => 'node_00'}}
-      end
 
-      let :complex_routing do
-        {
-          'stuff_queue_00' => {:routing_keys => %w[rk_00 rk_01], :node => 'node_00'},
-          'stuff_queue_01' => {:routing_keys => %w[rk_02 rk_03], :node => 'node_01'}
-        }
-      end
+    let :simple_routing do
+      {'stuff_queue_00' => {:routing_keys => %w[rk_00], :node => 'node_00'}}
+    end
 
-      let :exchange do
-        double(:exchange)
-      end
+    let :complex_routing do
+      {
+        'stuff_queue_00' => {:routing_keys => %w[rk_00 rk_01], :node => 'node_00'},
+        'stuff_queue_01' => {:routing_keys => %w[rk_02 rk_03], :node => 'node_01'}
+      }
+    end
 
-      let :connection do
-        double(:connection).tap do |c|
-          c.stub(:create_channel).and_return do
-            double(:channel).tap do |ch|
-              ch.stub(:exchange).and_return do
-                exchange
-              end
+    let :exchange do
+      double(:exchange)
+    end
+
+    let :connection do
+      double(:connection).tap do |c|
+        c.stub(:create_channel).and_return do
+          double(:channel).tap do |ch|
+            ch.stub(:exchange).and_return do
+              exchange
             end
           end
         end
       end
+    end
 
-      let :single_connection do
-        {'node_00' => connection}
-      end
+    let :single_connection do
+      {'node_00' => connection}
+    end
 
-      let :multiple_connections do
-        {'node_00' => connection, 'node_01' => connection}
-      end
+    let :multiple_connections do
+      {'node_00' => connection, 'node_01' => connection}
+    end
 
-      let :encoder do
-        double(:encoder).tap do |e|
-          e.stub(:properties).and_return(:content_type => 'application/x-nonsense')
-          e.stub(:encodes_batches?).and_return(false)
-          e.stub(:encode).and_return(nil)
-        end
+    let :encoder do
+      double(:encoder).tap do |e|
+        e.stub(:properties).and_return(:content_type => 'application/x-nonsense')
+        e.stub(:encodes_batches?).and_return(false)
+        e.stub(:encode).and_return(nil)
       end
+    end
+
+    describe '#publish' do
 
       context 'when sending single messages' do
         before do
@@ -119,6 +121,26 @@ module Autobahn
             @publisher.publish({'foo' => 7})
             @publisher.publish({'foo' => 8})
           end
+        end
+      end
+    end
+
+    describe '#broadcast' do
+      context 'simple routing' do
+        it 'should publish to all routing keys' do
+          exchange.should_receive(:publish).with(%([{"foo":1}]), hash_including(:routing_key => 'rk_00'))
+          @publisher = described_class.new('stuff', simple_routing, single_connection, JsonEncoder.new)
+          @publisher.broadcast({'foo' => 1})
+        end
+      end
+
+      context 'complex routing' do
+        it 'should publish to all routing keys' do
+          %w[rk_00 rk_01 rk_02 rk_03].each do |rk|
+            exchange.should_receive(:publish).with(%([{"foo":1}]), hash_including(:routing_key => rk))
+          end
+          @publisher = described_class.new('stuff', complex_routing, multiple_connections, JsonEncoder.new)
+          @publisher.broadcast({'foo' => 1})
         end
       end
     end
