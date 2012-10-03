@@ -41,7 +41,7 @@ module Autobahn
       queue_suffix_width = [Math.log10(connections.size * queues_per_node).ceil, 2].max
       rk_suffix_width = [Math.log10(connections.size * queues_per_node * rks_per_queue).ceil, 2].max
       exchange = connections.sample.create_channel.exchange(@exchange_name, :type => :direct, :durable => options.fetch(:durable, true))
-      queue_options = {:durable => options.fetch(:durable, true), :arguments => {}}
+      queue_options = {:durable => options.fetch(:durable, true), :arguments => options.fetch(:arguments, {})}
       queue_options[:arguments]['x-ha-policy'] = 'all' if options[:ha] == :all
       connections.size.times do |node_index|
         connection = connections[node_index]
