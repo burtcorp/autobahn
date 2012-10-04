@@ -89,7 +89,7 @@ module Autobahn
       connect!
       if @batch_options
         raise ArgumentError, 'Encoder does not support batching!' unless @encoder.encodes_batches?
-        options = options.merge(:batch => @batch_options)
+        options[:batch] = @batch_options.merge(options.fetch(:batch,{}))
       end
       options = {:logger => @logger}.merge(options)
       publisher = Publisher.new(@exchange_name, @routing, @connections, @encoder, options)

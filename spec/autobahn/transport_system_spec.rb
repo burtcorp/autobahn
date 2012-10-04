@@ -48,6 +48,12 @@ module Autobahn
         transport_system = described_class.new(api_uri, exchange_name, :batch => {:size => 3}, :cluster_factory => cluster_factory)
         expect { transport_system.publisher }.to raise_error(ArgumentError)
       end
+
+      it "overrides transport system's batch options" do
+        Publisher.should_receive(:new).with(anything, anything, anything, anything, hash_including(:batch => {:size => 1337, :timeout => 10})).and_return(stub(:start! => nil))
+        transport_system = described_class.new(api_uri, exchange_name, :batch => {:size => 3, :timeout => 10}, :cluster_factory => cluster_factory, :encoder => stub(:encodes_batches? => true))
+        transport_system.publisher(:batch => { :size => 1337})
+      end
     end
   end
 end
