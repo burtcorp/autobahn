@@ -9,6 +9,7 @@
 CLUSTER_SIZE=4
 NODENAME_PREFIX='rmq'
 START_PORT=6672
+AUTOBAHN_MNESIA='/tmp/autobahn_mnesia'
 
 function start_rmq_node {
 	nodename=$1
@@ -16,6 +17,7 @@ function start_rmq_node {
 	mgmt_port=$(($port + 50000))
 	RABBITMQ_NODE_PORT=$port \
 		RABBITMQ_NODENAME=$nodename \
+		RABBITMQ_MNESIA_BASE=$AUTOBAHN_MNESIA \
 		RABBITMQ_SERVER_START_ARGS="-rabbitmq_mochiweb listeners [{mgmt,[{port,$mgmt_port}]}]" \
 		rabbitmq-server -detached
 }
@@ -31,6 +33,7 @@ function join_cluster {
 }
 
 function start_cluster {
+	mkdir -p $AUTOBAHN_MNESIA
 	start_rmq_node "${NODENAME_PREFIX}0" $START_PORT
 
 	for ((n=1; n < $CLUSTER_SIZE; n++)); do
@@ -46,6 +49,12 @@ function stop_cluster {
 		rabbitmqctl -n "$NODENAME_PREFIX$n" stop
 	done
 }
+
+output=$(arp `hostname -s` | grep 127.0.0.1)
+if [ -z $output ]; then
+	echo 'The name returned by `hostname -s` must resolve to 127.0.0.1'
+	exit 1
+fi
 
 case "$1" in
 	"start" )

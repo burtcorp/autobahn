@@ -41,6 +41,7 @@ describe Autobahn do
         exchange = channel.exchange(exchange_name, :type => :direct)
         num_queues_per_node.times do |j|
           queue_index = i * num_queues_per_node + j
+          p "creating queue #{queue_names[queue_index]}"
           queue = channel.queue(queue_names[queue_index])
           queue.bind(exchange, :routing_key => routing_keys[queue_index])
         end
