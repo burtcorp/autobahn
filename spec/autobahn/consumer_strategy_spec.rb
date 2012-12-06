@@ -14,6 +14,14 @@ module Autobahn
         strategy.subscribe?(4, 12).should be_false
         strategy.subscribe?(9, 12).should be_true
       end
+
+      it 'includes every routing key exactly once' do
+        routing_keys = 0..9
+        strategies = 3.times.map { |consumer_index| described_class.new(consumer_index, 3) }
+        routing_keys.each do |index|
+          strategies.select { |strategy| strategy.subscribe?(index,routing_keys.count) }.size.should  == 1
+        end
+      end
     end
 
     context 'with a modulo subset' do

@@ -10,8 +10,9 @@ module Autobahn
       if @mode == :modulo
         index % @num_consumers == @consumer_index
       else
-        range_width = total_count/@num_consumers
-        start_index = range_width * @consumer_index
+        div, mod = total_count.divmod(@num_consumers)
+        start_index = div * @consumer_index + [@consumer_index, mod].min
+        range_width = @consumer_index >= mod ? div : div + 1
         index >= start_index && index < start_index + range_width
       end
     end
