@@ -38,6 +38,7 @@ function join_cluster {
 }
 
 function start_cluster {
+  test -d $CLUSTER_BASE_DIR/mnesia && rm -r $CLUSTER_BASE_DIR/mnesia
   mkdir -p $CLUSTER_BASE_DIR/mnesia $CLUSTER_BASE_DIR/log
   start_rmq_node "${NODENAME_PREFIX}0" $START_PORT
 
