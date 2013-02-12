@@ -47,6 +47,14 @@ function start_cluster {
     start_rmq_node $nodename $port
   done
 
+  if rabbitmqctl -q 2> /dev/null | grep -q '^    eval'; then
+    host=$(hostname -s)
+    for ((n=0; n < $CLUSTER_SIZE; n++)); do
+      nodename="$NODENAME_PREFIX$n"
+      rabbitmqctl -n $nodename@$host eval 'erlang:function_exported(rabbit,await_startup,0) andalso rabbit:await_startup().' > /dev/null
+    done
+  fi
+
   for ((n=1; n < $CLUSTER_SIZE; n++)); do
     port=$(($START_PORT + $n))
     nodename="$NODENAME_PREFIX$n"
