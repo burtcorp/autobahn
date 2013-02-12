@@ -9,60 +9,70 @@
 CLUSTER_SIZE=4
 NODENAME_PREFIX='rmq'
 START_PORT=6672
-AUTOBAHN_MNESIA='/tmp/autobahn_mnesia'
+CLUSTER_BASE_DIR='/tmp/rmq_cluster'
 
 function start_rmq_node {
-	nodename=$1
-	port=$2
-	mgmt_port=$(($port + 50000))
-	RABBITMQ_NODE_PORT=$port \
-		RABBITMQ_NODENAME=$nodename \
-		RABBITMQ_MNESIA_BASE=$AUTOBAHN_MNESIA \
-		RABBITMQ_SERVER_START_ARGS="-rabbitmq_mochiweb listeners [{mgmt,[{port,$mgmt_port}]}]" \
-		rabbitmq-server -detached
+  nodename=$1
+  port=$2
+  mgmt_port=$(($port + 50000))
+
+  mgmt_port_args_2x="-rabbitmq_mochiweb listeners [{mgmt,[{port,$mgmt_port}]}]"
+  mgmt_port_args_3x="-rabbitmq_management listener [{port,$mgmt_port}]"
+
+  RABBITMQ_NODE_PORT=$port \
+    RABBITMQ_NODENAME=$nodename \
+    RABBITMQ_MNESIA_BASE=$CLUSTER_BASE_DIR/mnesia \
+    RABBITMQ_LOG_BASE=$CLUSTER_BASE_DIR/log \
+    RABBITMQ_SERVER_START_ARGS="$mgmt_port_args_2x $mgmt_port_args_3x" \
+    rabbitmq-server -detached
 }
 
 function join_cluster {
-	nodename=$1
-	host=$(hostname -s)
-	master_node="${NODENAME_PREFIX}0"
-	rabbitmqctl -n $nodename stop_app
-	rabbitmqctl -n $nodename reset
-	rabbitmqctl -n $nodename cluster $master_node@$host
-	rabbitmqctl -n $nodename start_app
+  nodename=$1
+  host=$(hostname -s)
+  master_node="${NODENAME_PREFIX}0"
+  rabbitmqctl -n $nodename@$host stop_app
+  rabbitmqctl -n $nodename@$host cluster $master_node@$host
+  rabbitmqctl -n $nodename@$host start_app
 }
 
 function start_cluster {
-	mkdir -p $AUTOBAHN_MNESIA
-	start_rmq_node "${NODENAME_PREFIX}0" $START_PORT
+  mkdir -p $CLUSTER_BASE_DIR/mnesia $CLUSTER_BASE_DIR/log
+  start_rmq_node "${NODENAME_PREFIX}0" $START_PORT
 
-	for ((n=1; n < $CLUSTER_SIZE; n++)); do
-		port=$(($START_PORT + $n))
-		nodename="$NODENAME_PREFIX$n"
-		start_rmq_node $nodename $port
-		join_cluster $nodename
-	done
+  for ((n=1; n < $CLUSTER_SIZE; n++)); do
+    port=$(($START_PORT + $n))
+    nodename="$NODENAME_PREFIX$n"
+    start_rmq_node $nodename $port
+  done
+
+  for ((n=1; n < $CLUSTER_SIZE; n++)); do
+    port=$(($START_PORT + $n))
+    nodename="$NODENAME_PREFIX$n"
+    join_cluster $nodename
+  done
 }
 
 function stop_cluster {
-	for ((n=0; n < $CLUSTER_SIZE; n++)); do
-		rabbitmqctl -n "$NODENAME_PREFIX$n" stop
-	done
+  for ((n=0; n < $CLUSTER_SIZE; n++)); do
+    rabbitmqctl -n "$NODENAME_PREFIX$n" stop
+  done
 }
 
-output=$(arp `hostname -s` | grep 127.0.0.1)
-if [ -z $output ]; then
-	echo 'The name returned by `hostname -s` must resolve to 127.0.0.1'
-	exit 1
+arp $(hostname -s) 2>&1 | grep 127.0.0.1 > /dev/null
+
+if [ $? -gt 0 ]; then
+  echo 'The name returned by `hostname -s` must resolve to 127.0.0.1' 1>&2
+  exit 1
 fi
 
+set -e
+
 case "$1" in
-	"start" )
-		start_cluster ;;
+  "start" )
+    start_cluster ;;
     "stop" )
         stop_cluster ;;
-	* )
-		echo "Usage: clusterctl start|stop" ;;
+  * )
+    echo "Usage: clusterctl start|stop" 1>&2 ;;
 esac
-
-
