@@ -10,7 +10,7 @@ module Autobahn
       def configure_rest_client(base_url, user, password)
         @base_url = base_url
         @http_client = HTTPClient.new
-        @http_client.set_auth(@base_url, user, password)
+        @http_client.set_auth(nil, user, password)
       end
 
       def api_call(entity, id=nil)

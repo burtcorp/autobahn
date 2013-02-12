@@ -2,6 +2,8 @@ require 'bundler/setup'
 require 'logger'
 require 'autobahn'
 require 'uri'
+require 'webmock/rspec'
+WebMock.disable!
 
 module StubHelpers
   def stubs(*names)
