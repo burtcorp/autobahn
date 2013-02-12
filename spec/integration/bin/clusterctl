@@ -31,8 +31,9 @@ function join_cluster {
   nodename=$1
   host=$(hostname -s)
   master_node="${NODENAME_PREFIX}0"
+  join_command=$(rabbitmqctl -q 2>/dev/null | egrep -o '    (join_)?cluster ' | tr -d ' ')
   rabbitmqctl -n $nodename@$host stop_app
-  rabbitmqctl -n $nodename@$host cluster $master_node@$host
+  rabbitmqctl -n $nodename@$host $join_command $master_node@$host
   rabbitmqctl -n $nodename@$host start_app
 }
 
