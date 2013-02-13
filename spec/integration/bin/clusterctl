@@ -14,10 +14,11 @@ CLUSTER_BASE_DIR='/tmp/rmq_cluster'
 function start_rmq_node {
   nodename=$1
   port=$2
-  mgmt_port=$(($port + 50000))
+  mgmt_port_2x=$(($port + 50000))
+  mgmt_port_3x=$(($port + 10000))
 
-  mgmt_port_args_2x="-rabbitmq_mochiweb listeners [{mgmt,[{port,$mgmt_port}]}]"
-  mgmt_port_args_3x="-rabbitmq_management listener [{port,$mgmt_port}]"
+  mgmt_port_args_2x="-rabbitmq_mochiweb listeners [{mgmt,[{port,$mgmt_port_2x}]}]"
+  mgmt_port_args_3x="-rabbitmq_management listener [{port,$mgmt_port_3x}]"
 
   RABBITMQ_NODE_PORT=$port \
     RABBITMQ_NODENAME=$nodename \
