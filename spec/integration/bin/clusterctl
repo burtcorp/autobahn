@@ -31,12 +31,14 @@ function join_cluster {
   nodename=$1
   host=$(hostname -s)
   master_node="${NODENAME_PREFIX}0"
+  join_command=$(rabbitmqctl -q 2>/dev/null | egrep -o '    (join_)?cluster ' | tr -d ' ')
   rabbitmqctl -n $nodename@$host stop_app
-  rabbitmqctl -n $nodename@$host cluster $master_node@$host
+  rabbitmqctl -n $nodename@$host $join_command $master_node@$host
   rabbitmqctl -n $nodename@$host start_app
 }
 
 function start_cluster {
+  test -d $CLUSTER_BASE_DIR/mnesia && rm -r $CLUSTER_BASE_DIR/mnesia
   mkdir -p $CLUSTER_BASE_DIR/mnesia $CLUSTER_BASE_DIR/log
   start_rmq_node "${NODENAME_PREFIX}0" $START_PORT
 
@@ -46,8 +48,15 @@ function start_cluster {
     start_rmq_node $nodename $port
   done
 
+  if rabbitmqctl -q 2> /dev/null | grep -q '^    eval'; then
+    host=$(hostname -s)
+    for ((n=0; n < $CLUSTER_SIZE; n++)); do
+      nodename="$NODENAME_PREFIX$n"
+      rabbitmqctl -n $nodename@$host eval 'erlang:function_exported(rabbit,await_startup,0) andalso rabbit:await_startup().' > /dev/null
+    done
+  fi
+
   for ((n=1; n < $CLUSTER_SIZE; n++)); do
-    port=$(($START_PORT + $n))
     nodename="$NODENAME_PREFIX$n"
     join_cluster $nodename
   done
