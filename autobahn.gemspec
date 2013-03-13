@@ -17,8 +17,8 @@ Gem::Specification.new do |s|
 
   s.rubyforge_project = 'autobahn'
   
-  s.add_dependency 'hot_bunnies', '1.4.0.pre4'
   s.add_dependency 'httpclient', '~> 2.2.5'
+  s.add_dependency 'hot_bunnies', '~> 1.5'
   s.add_dependency 'jruby-openssl'
   s.add_dependency 'json'
 
