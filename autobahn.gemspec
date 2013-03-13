@@ -19,7 +19,6 @@ Gem::Specification.new do |s|
   
   s.add_dependency 'hot_bunnies', '~> 1.5'
   s.add_dependency 'httpclient', '~> 2.2'
-  s.add_dependency 'jruby-openssl'
   s.add_dependency 'json'
 
   s.files         = Dir['lib/**/*.rb'] + Dir['lib/**/*.jar']
