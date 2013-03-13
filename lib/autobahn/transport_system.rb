@@ -102,6 +102,7 @@ module Autobahn
     def disconnect!
       disconnect_channels!
       @connections.values.each(&:close) if @connections
+      @connections = nil
     end
 
     private
