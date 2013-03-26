@@ -35,6 +35,13 @@ module Autobahn
       end
     end
 
+    describe '#name' do
+      it 'returns the name of the exchange' do
+        ts = described_class.new(api_uri, 'foobar')
+        ts.name.should == 'foobar'
+      end
+    end
+
     describe '#size' do
       it 'returns the number of queues in the system' do
         cluster.stub(:queues).and_return([

@@ -17,6 +17,10 @@ module Autobahn
       @publishers = []
     end
 
+    def name
+      @exchange_name
+    end
+
     def exists?(reload=false)
       setup!(reload)
       @routing.keys.any?
