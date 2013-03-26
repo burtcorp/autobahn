@@ -10,7 +10,7 @@ require 'ant'
 namespace :release do
   task :tag do
     version_string = "v#{Autobahn::VERSION}"
-    unless %x(git tag -l).include?(version_string)
+    unless %x(git tag -l).include?("#{version_string}\n")
       system %(git tag -a #{version_string} -m #{version_string})
     end
     system %(git push && git push --tags)
