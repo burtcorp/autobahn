@@ -1,3 +1,3 @@
 module Autobahn
-  VERSION = '1.3.7.pre6'.freeze
+  VERSION = '1.3.7'.freeze
 end
