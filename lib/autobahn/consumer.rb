@@ -31,6 +31,7 @@ module Autobahn
         @deliver_pool.execute { deliver(handler, timeout) }
       when :blocking
         deliver(handler, timeout)
+      when :noop
       else
         raise ArgumentError, "Not a valid subscription mode: #{mode}"
       end

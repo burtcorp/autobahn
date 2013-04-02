@@ -324,6 +324,21 @@ describe Autobahn do
         @consumer.disconnect!
         @queues.map { |q| q.status.first }.reduce(:+).should == 35
       end
+
+      it 'allows overriding of the local buffer, for very low level consuming' do
+        demultiplexer = SubdividingDemultiplexer.new(3)
+        consumer = @transport_system.consumer(:demultiplexer => demultiplexer)
+        consumer.subscribe(:mode => :noop)
+        messages = []
+        12.times do |i|
+          headers, message = demultiplexer.take_next(i % 3)
+          if headers
+            messages << message
+            headers.ack
+          end
+        end
+        messages.should have(12).items
+      end
     end
 
     context 'with encoded messages' do
@@ -706,5 +721,19 @@ describe Autobahn do
     it 'does nothing if the system already does not exist' do
       expect { @stuff_ts.destroy! }.to_not raise_error
     end
+  end
+end
+
+class SubdividingDemultiplexer
+  def initialize(size)
+    @buffers = size.times.map { Autobahn::Concurrency::ArrayBlockingQueue.new(100) }
+  end
+
+  def put(pair)
+    @buffers[pair.last.hash % @buffers.size].put(pair)
+  end
+
+  def take_next(n)
+    @buffers[n].poll
   end
 end
