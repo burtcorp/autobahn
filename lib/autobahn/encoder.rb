@@ -222,6 +222,10 @@ module Autobahn
   end
 
   if (defined? MsgPackEncoder) && (defined? LzfEncoder)
-    require 'autobahn_msgpack_lzf'
+    begin
+      require 'autobahn_msgpack_lzf'
+    rescue LoadError
+      $stderr.puts "warning: Failed to load autobahn_msgpack_lzf.jar. Run `rake build` to create it."
+    end
   end
 end
