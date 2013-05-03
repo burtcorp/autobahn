@@ -113,6 +113,7 @@ module Autobahn
     def publish_raw(message, rk)
       rk ||= @strategy.select_routing_key(routing_keys, message)
       ex = exchanges_by_routing_key[rk]
+      raise ArgumentError, "No exchange found for #{rk}" unless ex
       em = @encoder.encode(message)
       op = {:routing_key => rk, :properties => @publish_properties.merge(@encoder.properties)}
       ex.publish(em, op)
