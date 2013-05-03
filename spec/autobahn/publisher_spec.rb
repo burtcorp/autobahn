@@ -81,12 +81,6 @@ module Autobahn
           exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense', :persistent => true}))
           publisher.publish('hello world')
         end
-
-        it 'Raises a legible error if the exchange we want to post to isnt defined' do
-          @publisher.stub!(:exchanges_by_routing_key).and_return({})
-          expect {@publisher.publish('hello world')}.to raise_error ArgumentError
-        end
-
       end
 
       context 'when batching' do
