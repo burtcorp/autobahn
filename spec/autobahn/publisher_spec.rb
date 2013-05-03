@@ -48,6 +48,7 @@ module Autobahn
     end
 
     describe '#publish' do
+
       context 'when sending single messages' do
         before do
           @publisher = described_class.new('stuff', simple_routing, single_connection, encoder)
@@ -82,9 +83,8 @@ module Autobahn
         end
 
         it 'Raises a legible error if the exchange we want to post to isnt defined' do
-          empty_routing = {'stuff_queue_00' => {:routing_keys => %w[], :node => 'node_00'}}
-          @publisher = described_class.new('stuff', empty_routing, single_connection, encoder)
-          expect { @publisher.publish('hello world') }.to raise_error(ArgumentError)
+          @publisher.stub!(:exchanges_by_routing_key).and_return({})
+          expect {@publisher.publish('hello world')}.to raise_error ArgumentError
         end
 
       end
