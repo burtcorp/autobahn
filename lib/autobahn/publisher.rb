@@ -39,23 +39,22 @@ module Autobahn
       if @batch_options && @strategy.introspective?
         rk = @strategy.select_routing_key(routing_keys, message)
       end
-      with_buffer_exclusively(rk) do |buffer|
-        buffer.push(message)
-      end
-      drain
+      publish_internal(message, rk)
     end
 
     def broadcast(message)
       routing_keys.each do |rk|
-        with_buffer_exclusively(rk) do |buffer|
-          buffer.push(message)
-        end
+        publish_internal(message, rk)
       end
-      drain
     end
 
     def flush!
-      drain(true)
+      @batch_buffers.each_key do |rk|
+        with_buffer_exclusively(rk) do |buffer|
+          drain_buffer(buffer, rk)
+        end
+      end
+      @last_drain = Time.now
     end
 
     def disconnect!
@@ -93,26 +92,27 @@ module Autobahn
       @routing_keys ||= nodes_by_routing_key.keys
     end
 
-    def drain(force=false)
-      @last_drain = Time.now
-      batch_size = @batch_options[:size]
-      @batch_buffers.each_key do |rk|
-        with_buffer_exclusively(rk) do |buffer|
-          if (buffer.size >= batch_size) || (force && !buffer.empty?)
-            batch = buffer.shift(batch_size)
-            if @encoder.encodes_batches?
-              publish_raw(batch, rk)
-            else
-              batch.each { |m| publish_raw(m, rk) }
-            end
-          end
-        end
+    def maybe_force_drain
+      return if (Time.now - @last_drain) < @batch_options[:timeout]
+      flush!
+    end
+
+    def drain_buffer(buffer, rk)
+      batch = buffer.shift(buffer.size)
+      if @encoder.encodes_batches?
+        publish_raw(batch, rk) unless batch.empty?
+      else
+        batch.each { |m| publish_raw(m, rk) }
       end
     end
 
-    def maybe_force_drain
-      return if (Time.now - @last_drain) < @batch_options[:timeout]
-      drain(true)
+    def publish_internal(message, rk)
+      with_buffer_exclusively(rk) do |buffer|
+        buffer.push(message)
+        if buffer.size >= @batch_options[:size]
+          drain_buffer(buffer, rk)
+        end
+      end
     end
 
     def publish_raw(message, rk)
