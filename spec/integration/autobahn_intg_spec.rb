@@ -327,8 +327,9 @@ describe Autobahn do
 
       it 'allows overriding of the local buffer, for very low level consuming' do
         demultiplexer = SubdividingDemultiplexer.new(3)
-        consumer = @transport_system.consumer(:demultiplexer => demultiplexer)
-        consumer.subscribe(:mode => :noop)
+        @consumer.disconnect!
+        @consumer = @transport_system.consumer(:demultiplexer => demultiplexer)
+        @consumer.subscribe(:mode => :noop)
         messages = []
         12.times do |i|
           headers, message = demultiplexer.take_next(i % 3)
@@ -343,6 +344,7 @@ describe Autobahn do
 
     context 'with encoded messages' do
       before do
+        @consumer.disconnect!
         @encoded_transport_system = create_transport_system(exchange_name)
       end
 
@@ -353,8 +355,8 @@ describe Autobahn do
       it 'auto discovers the encoding based on the content type header' do
         @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample, :properties => {:content_type => 'application/json'})
         await_delivery
-        consumer = @encoded_transport_system.consumer
-        h, m = consumer.next
+        @consumer = @encoded_transport_system.consumer
+        h, m = @consumer.next
         m.should == {'hello' => 'world'}
       end
 
@@ -364,8 +366,8 @@ describe Autobahn do
         preferred_decoder = double('Encoder')
         preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
         preferred_decoder.should_receive(:decode)
-        consumer = @encoded_transport_system.consumer(:preferred_decoder => preferred_decoder)
-        consumer.next
+        @consumer = @encoded_transport_system.consumer(:preferred_decoder => preferred_decoder)
+        @consumer.next
       end
 
       it "doesn't use preferred_decoder when content-type/encoding don't match" do
@@ -374,8 +376,8 @@ describe Autobahn do
         preferred_decoder = double('Encoder')
         preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
         preferred_decoder.should_not_receive(:decode)
-        consumer = @encoded_transport_system.consumer(:preferred_decoder => preferred_decoder)
-        consumer.next
+        @consumer = @encoded_transport_system.consumer(:preferred_decoder => preferred_decoder)
+        @consumer.next
       end
 
       it 'still supports :encoder option' do
@@ -384,8 +386,8 @@ describe Autobahn do
         preferred_decoder = double('Encoder')
         preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
         preferred_decoder.should_receive(:decode)
-        consumer = @encoded_transport_system.consumer(:encoder => preferred_decoder)
-        consumer.next
+        @consumer = @encoded_transport_system.consumer(:encoder => preferred_decoder)
+        @consumer.next
       end
 
       it 'uses fallback_decoder for unknown encodings' do
@@ -394,8 +396,8 @@ describe Autobahn do
         fallback_decoder = double('Encoder')
         fallback_decoder.stub(:properties => {},:encodes_batches? => false)
         fallback_decoder.should_receive(:decode)
-        consumer = @encoded_transport_system.consumer(:fallback_decoder => fallback_decoder)
-        consumer.next
+        @consumer = @encoded_transport_system.consumer(:fallback_decoder => fallback_decoder)
+        @consumer.next
       end
 
       it  "doesn't use fallback_decoder when encoder for content-type/encoding exist" do
@@ -404,13 +406,14 @@ describe Autobahn do
         fallback_decoder = double('Encoder')
         fallback_decoder.stub(:properties => {},:encodes_batches? => false)
         fallback_decoder.should_not_receive(:decode)
-        consumer = @encoded_transport_system.consumer(:fallback_decoder => fallback_decoder)
-        consumer.next
+        @consumer = @encoded_transport_system.consumer(:fallback_decoder => fallback_decoder)
+        @consumer.next
       end
     end
 
     context 'with compressed messages' do
       before do
+        @consumer.disconnect!
         @compressed_transport_system = create_transport_system(exchange_name)
         compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
         @exchange.publish(compressed_message, :routing_key => routing_keys.sample, :properties => {:content_type => 'application/json', :content_encoding => 'gzip'})
@@ -422,8 +425,8 @@ describe Autobahn do
       end
 
       it 'auto discovers the compression based on the content encoding property' do
-        consumer = @compressed_transport_system.consumer
-        h, m = consumer.next(5)
+        @consumer = @compressed_transport_system.consumer
+        h, m = @consumer.next(5)
         m.should == {'hello' => 'world'}
       end
     end
@@ -440,6 +443,7 @@ describe Autobahn do
           @exchange.publish(encoder.encode(batch), :routing_key => routing_keys.sample, :properties => encoder.properties)
         end
         @latch = Autobahn::Concurrency::CountDownLatch.new(messages.size)
+        @consumer.disconnect!
         @consumer = @batching_transport_system.consumer
       end
 
