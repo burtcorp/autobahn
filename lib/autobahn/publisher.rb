@@ -12,7 +12,10 @@ module Autobahn
       @logger = options[:logger] || NullLogger.new
       @publish_properties = options[:publish] || {}
       @publish_properties[:persistent] = true if options[:persistent]
-      @batch_buffers = Hash[routing_keys.map { |rk| [rk,Concurrency::LinkedBlockingDeque.new] }].merge(nil => Concurrency::LinkedBlockingDeque.new)
+      @batch_buffers = routing_keys.each_with_object({}) do |rk, buffers|
+        buffers[rk] = Concurrency::ConcurrentLinkedQueue.new
+      end
+      @batch_buffers[nil] = Concurrency::ConcurrentLinkedQueue.new
     end
 
     def start!
@@ -34,13 +37,13 @@ module Autobahn
       if @batch_options && @strategy.introspective?
         rk = @strategy.select_routing_key(routing_keys, message)
       end
-      @batch_buffers[rk].add_last(message)
+      @batch_buffers[rk].offer(message)
       drain
     end
 
     def broadcast(message)
       routing_keys.each do |rk|
-        @batch_buffers[rk].add_last(message)
+        @batch_buffers[rk].offer(message)
       end
       drain
     end
@@ -92,13 +95,13 @@ module Autobahn
       if @encoder.encodes_batches?
         batch = []
         @batch_options[:size].times do
-          msg = buffer.poll_first
+          msg = buffer.poll
           batch << msg if msg
         end
         publish_raw(batch, rk)
       else
         @batch_options[:size].times do
-          msg = buffer.poll_first
+          msg = buffer.poll
           publish_raw(msg, rk) if msg
         end
       end
