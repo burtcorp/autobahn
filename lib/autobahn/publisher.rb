@@ -12,10 +12,12 @@ module Autobahn
       @logger = options[:logger] || NullLogger.new
       @publish_properties = options[:publish] || {}
       @publish_properties[:persistent] = true if options[:persistent]
-      @batch_buffers = routing_keys.each_with_object({}) do |rk, buffers|
-        buffers[rk] = Concurrency::ConcurrentLinkedQueue.new
+      @buffer_locks = {nil => Concurrency::ReentrantLock.new}
+      @batch_buffers = {nil => []}
+      routing_keys.each do |rk|
+        @buffer_locks[rk] = Concurrency::ReentrantLock.new
+        @batch_buffers[rk] = []
       end
-      @batch_buffers[nil] = Concurrency::ConcurrentLinkedQueue.new
     end
 
     def start!
@@ -37,13 +39,17 @@ module Autobahn
       if @batch_options && @strategy.introspective?
         rk = @strategy.select_routing_key(routing_keys, message)
       end
-      @batch_buffers[rk].offer(message)
+      with_buffer_exclusively(rk) do |buffer|
+        buffer.push(message)
+      end
       drain
     end
 
     def broadcast(message)
       routing_keys.each do |rk|
-        @batch_buffers[rk].offer(message)
+        with_buffer_exclusively(rk) do |buffer|
+          buffer.push(message)
+        end
       end
       drain
     end
@@ -65,6 +71,13 @@ module Autobahn
 
     attr_reader :logger
 
+    def with_buffer_exclusively(rk)
+      @buffer_locks[rk].lock
+      yield @batch_buffers[rk]
+    ensure
+      @buffer_locks[rk].unlock
+    end
+
     def exchanges_by_routing_key
       @exchanges_by_routing_key ||= begin
         exchanges_by_node = Hash[nodes_by_routing_key.values.uniq.map { |node| [node, @connections[node].create_channel.exchange(@exchange_name, :passive => true)] }]
@@ -81,31 +94,20 @@ module Autobahn
     end
 
     def drain(force=false)
-      @batch_buffers.each do |rk, buffer|
-        while (buffer.size >= @batch_options[:size]) || (buffer.size > 0 && force)
-          # TODO: this block can be entered by two threads simultaneously since the 
-          #       count will remain high until a bit further down, on the other hand
-          #       the worst case result is batches with too few messages
-          drain_batch(rk, buffer)
-        end
-      end
-    end
-
-    def drain_batch(rk, buffer)
-      if @encoder.encodes_batches?
-        batch = []
-        @batch_options[:size].times do
-          msg = buffer.poll
-          batch << msg if msg
-        end
-        publish_raw(batch, rk)
-      else
-        @batch_options[:size].times do
-          msg = buffer.poll
-          publish_raw(msg, rk) if msg
-        end
-      end
       @last_drain = Time.now
+      batch_size = @batch_options[:size]
+      @batch_buffers.each_key do |rk|
+        with_buffer_exclusively(rk) do |buffer|
+          if (buffer.size >= batch_size) || (force && !buffer.empty?)
+            batch = buffer.shift(batch_size)
+            if @encoder.encodes_batches?
+              publish_raw(batch, rk)
+            else
+              batch.each { |m| publish_raw(m, rk) }
+            end
+          end
+        end
+      end
     end
 
     def maybe_force_drain
