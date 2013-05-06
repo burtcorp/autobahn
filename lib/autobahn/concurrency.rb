@@ -7,19 +7,12 @@ module Autobahn
   module Concurrency
     java_import 'java.lang.Thread'
     java_import 'java.lang.InterruptedException'
-    java_import 'java.util.concurrent.atomic.AtomicInteger'
-    java_import 'java.util.concurrent.atomic.AtomicBoolean'
-    java_import 'java.util.concurrent.ThreadFactory'
-    java_import 'java.util.concurrent.Executors'
-    java_import 'java.util.concurrent.LinkedBlockingQueue'
-    java_import 'java.util.concurrent.LinkedBlockingDeque'
-    java_import 'java.util.concurrent.ArrayBlockingQueue'
-    java_import 'java.util.concurrent.TimeUnit'
-    java_import 'java.util.concurrent.CountDownLatch'
-    java_import 'java.util.concurrent.locks.ReentrantLock'
+    include_package 'java.util.concurrent'
+    include_package 'java.util.concurrent.atomic'
+    include_package 'java.util.concurrent.locks'
 
     class NamingDaemonThreadFactory
-      include ThreadFactory
+      include Concurrency::ThreadFactory
 
       def self.next_id
         @id ||= Concurrency::AtomicInteger.new
@@ -40,7 +33,7 @@ module Autobahn
 
     class Lock
       def initialize
-        @lock = ReentrantLock.new
+        @lock = Concurrency::ReentrantLock.new
       end
 
       def lock
