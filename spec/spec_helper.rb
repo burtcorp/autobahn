@@ -1,4 +1,4 @@
-require 'bundler/setup'
+require 'bundler'; Bundler.setup(:default, :development, :test)
 require 'logger'
 require 'autobahn'
 require 'uri'
