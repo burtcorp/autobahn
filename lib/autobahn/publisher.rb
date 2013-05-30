@@ -48,10 +48,15 @@ module Autobahn
       end
     end
 
-    def flush!
+    def flush!(silent = false)
       @batch_buffers.each_key do |rk|
         with_buffer_exclusively(rk) do |buffer|
-          drain_buffer(buffer, rk)
+          begin
+            drain_buffer(buffer, rk)
+          rescue => e
+            raise unless silent
+            @logger.error "Flush error ignored #{e.message} (#{e.class})\n#{e.backtrace.join("\n")}"
+          end
         end
       end
       @last_drain = Time.now
@@ -60,6 +65,7 @@ module Autobahn
     def disconnect!
       @drainer_task.cancel(false) if @drainer_task
       @scheduler.shutdown if @scheduler
+      flush!(true)
       exchanges_by_routing_key.values.uniq.map(&:channel).map(&:close)
       @exchanges_by_routing_key = nil
       @nodes_by_routing_key = nil

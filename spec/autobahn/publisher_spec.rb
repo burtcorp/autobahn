@@ -144,5 +144,34 @@ module Autobahn
         end
       end
     end
+
+    describe '#disconnect!' do
+      let :publisher do
+        described_class.new('stuff', complex_routing, multiple_connections, JsonEncoder.new, logger: logger, batch: {size: 3})
+      end
+
+      let :logger do
+        NullLogger.new
+      end
+
+      it 'flushes each routing key' do
+        %w[rk_00 rk_01 rk_02 rk_03].each do |rk|
+          exchange.should_receive(:publish).with(%([{"foo":1}]), hash_including(:routing_key => rk))
+        end
+        exchange.stub_chain(:channel, close: nil)
+        publisher.broadcast({'foo' => 1})
+        publisher.disconnect!
+      end
+
+      it 'flushes each routing key even on failure, and logs errors' do
+        %w[rk_00 rk_01 rk_02 rk_03].each do |rk|
+          exchange.should_receive(:publish).with(%([{"foo":1}]), hash_including(:routing_key => rk)).and_raise(TypeError)
+        end
+        logger.should_receive(:error).exactly(4).times
+        exchange.stub_chain(:channel, close: nil)
+        publisher.broadcast({'foo' => 1})
+        publisher.disconnect!
+      end
+    end
   end
 end
