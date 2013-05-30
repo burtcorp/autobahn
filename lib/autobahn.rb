@@ -10,7 +10,7 @@ module Autobahn
 
   class NullLogger
     [:debug, :info, :warn, :error, :fatal].each do |level|
-      define_method(level) { |_| }
+      define_method(level) { |message = nil| }
     end
   end
 end
