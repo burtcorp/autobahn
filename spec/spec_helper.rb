@@ -5,16 +5,16 @@ require 'uri'
 require 'webmock/rspec'
 WebMock.disable!
 
-module StubHelpers
-  def stubs(*names)
+module DoubleHelpers
+  def doubles(*names)
     names.each do |name|
-      let(name) { stub(name) }
+      let(name) { double(name) }
     end
   end
 end
 
 RSpec.configure do |conf|
-  conf.extend(StubHelpers)
+  conf.extend(DoubleHelpers)
 end
 
 RSpec::Matchers.define :time_out do

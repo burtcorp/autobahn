@@ -4,17 +4,14 @@ require_relative '../spec_helper'
 
 
 describe Autobahn do
-  let(:num_nodes) { 4 }
-  let(:num_queues_per_node) { 3 }
-  let(:num_queues) { num_nodes * num_queues_per_node }
-  let(:base_port) { 6672 }
-  let(:api_base_port) { 56672 }
-  let(:api_uri) { "http://localhost:#{api_base_port}/api" }
-  let(:exchange_name) { 'test_exchange' }
-  let(:queue_prefix) { 'test_queue_' }
-  let(:routing_key_prefix) { 'test_rk_' }
-  let(:queue_names) { num_queues.times.map { |i| "#{queue_prefix}#{i.to_s.rjust(2, '0')}" } }
-  let(:routing_keys) { num_queues.times.map { |i| "#{routing_key_prefix}#{i.to_s.rjust(2, '0')}" } }
+  NUM_NODES = 4
+  NUM_QUEUES_PER_NODE = 3
+  NUM_QUEUES = NUM_NODES * NUM_QUEUES_PER_NODE
+  BASE_PORT = 6672
+  API_BASE_PORT = 56672
+  EXCHANGE_NAME = 'test_exchange'.freeze
+  QUEUE_NAMES = Array.new(NUM_QUEUES) { |i| "test_queue_#{i.to_s.rjust(2, '0')}".freeze }.freeze
+  ROUTING_KEYS = Array.new(NUM_QUEUES) { |i| "test_rk_#{i.to_s.rjust(2, '0')}".freeze }.freeze
 
   def counting_down(n, options={})
     latch = Autobahn::Concurrency::CountDownLatch.new(n)
@@ -30,19 +27,19 @@ describe Autobahn do
     logger = Logger.new(STDERR)
     logger.level = Logger.const_get((ENV['LOG_LEVEL'] || 'FATAL').upcase)
     logger.progname = name
-    Autobahn.transport_system(api_uri, name, options.merge(:logger => logger))
+    Autobahn.transport_system("http://localhost:#{API_BASE_PORT}/api", name, options.merge(:logger => logger))
   end
 
   before :all do
     begin
-      num_nodes.times do |i|
-        connection = HotBunnies.connect(:port => base_port + i)
+      NUM_NODES.times do |i|
+        connection = HotBunnies.connect(:port => BASE_PORT + i)
         channel = connection.create_channel
-        exchange = channel.exchange(exchange_name, :type => :direct)
-        num_queues_per_node.times do |j|
-          queue_index = i * num_queues_per_node + j
-          queue = channel.queue(queue_names[queue_index])
-          queue.bind(exchange, :routing_key => routing_keys[queue_index])
+        exchange = channel.exchange(EXCHANGE_NAME, :type => :direct)
+        NUM_QUEUES_PER_NODE.times do |j|
+          queue_index = i * NUM_QUEUES_PER_NODE + j
+          queue = channel.queue(QUEUE_NAMES[queue_index])
+          queue.bind(exchange, :routing_key => ROUTING_KEYS[queue_index])
         end
         channel.close
         connection.close
@@ -53,7 +50,7 @@ describe Autobahn do
   end
 
   before :all do
-    @transport_system = create_transport_system(exchange_name)
+    @transport_system = create_transport_system(EXCHANGE_NAME)
   end
 
   after :all do
@@ -61,10 +58,10 @@ describe Autobahn do
   end
 
   before :all do
-    @connection = HotBunnies.connect(:port => base_port)
-    @exchange = @connection.create_channel.exchange(exchange_name, :passive => true)
-    @queues = num_queues.times.map do |i|
-      @connection.create_channel.queue(queue_names[i], :passive => true)
+    @connection = HotBunnies.connect(:port => BASE_PORT)
+    @exchange = @connection.create_channel.exchange(EXCHANGE_NAME, :passive => true)
+    @queues = NUM_QUEUES.times.map do |i|
+      @connection.create_channel.queue(QUEUE_NAMES[i], :passive => true)
     end
   end
 
@@ -104,7 +101,7 @@ describe Autobahn do
 
     context 'with encoded messages' do
       before do
-        @encoded_transport_system = create_transport_system(exchange_name, :encoder => Autobahn::JsonEncoder.new)
+        @encoded_transport_system = create_transport_system(EXCHANGE_NAME, :encoder => Autobahn::JsonEncoder.new)
       end
 
       after do
@@ -123,7 +120,7 @@ describe Autobahn do
       before do
         @encoder = Autobahn::GzipEncoder.new(Autobahn::JsonEncoder.new)
         options = {:encoder => @encoder}
-        @compressed_transport_system = create_transport_system(exchange_name, options)
+        @compressed_transport_system = create_transport_system(EXCHANGE_NAME, options)
         publisher = @compressed_transport_system.publisher
         publisher.publish({'hello' => 'world'})
         await_delivery
@@ -174,7 +171,7 @@ describe Autobahn do
             :timeout => @batch_timeout
           }
         }
-        @batching_transport_system = create_transport_system(exchange_name, options)
+        @batching_transport_system = create_transport_system(EXCHANGE_NAME, options)
         @publisher = @batching_transport_system.publisher
       end
 
@@ -231,7 +228,7 @@ describe Autobahn do
 
   describe 'Consuming a transport system' do
     let :messages do
-      (num_queues * 3).times.map { |i| "foo#{i}" }
+      (NUM_QUEUES * 3).times.map { |i| "foo#{i}" }
     end
 
     before do
@@ -245,7 +242,7 @@ describe Autobahn do
     context 'when subscribed' do
       before do
         messages.each_with_index do |msg, i|
-          @exchange.publish(msg, :routing_key => routing_keys[i % num_queues], :properties => {:content_type => 'application/octet-stream'})
+          @exchange.publish(msg, :routing_key => ROUTING_KEYS[i % NUM_QUEUES], :properties => {:content_type => 'application/octet-stream'})
         end
       end
 
@@ -260,7 +257,7 @@ describe Autobahn do
 
       it 'subscribes to queues over connections to the node hosting the queue' do
         @consumer.subscribe { |headers, message| }
-        queue_names.each do |queue_name|
+        QUEUE_NAMES.each do |queue_name|
           queue_info = @transport_system.cluster.queue("%2F/#{URI.encode(queue_name)}")
           queue_node = queue_info['node']
           consumers = queue_info['consumer_details'].reduce([]) do |acc, consumer_details|
@@ -277,14 +274,14 @@ describe Autobahn do
         @consumer.disconnect!
         @consumer = @transport_system.consumer(:strategy => Autobahn::SubsetConsumerStrategy.new(2, 3))
         @consumer.subscribe { |headers, message| }
-        subscribed_queues = queue_names.reduce([]) do |acc, queue_name|
+        subscribed_queues = QUEUE_NAMES.reduce([]) do |acc, queue_name|
           queue_info = @transport_system.cluster.queue("%2F/#{URI.encode(queue_name)}")
           queue_node = queue_info['node']
           consumers = queue_info['consumer_details']
           acc << queue_name if consumers.size > 0
           acc
         end
-        subscribed_queues.should == queue_names[8, 4]
+        subscribed_queues.should == QUEUE_NAMES[8, 4]
       end
 
       it 'does not receive new messages after it has been unsubscribed' do
@@ -297,7 +294,7 @@ describe Autobahn do
           end
         end
         @consumer.unsubscribe!
-        @exchange.publish('foo', :routing_key => routing_keys.sample, :properties => {:content_type => 'application/octet-stream'})
+        @exchange.publish('foo', :routing_key => ROUTING_KEYS.sample, :properties => {:content_type => 'application/octet-stream'})
         await_delivery
         @queues.map { |q| q.status.first }.reduce(:+).should == 1
       end
@@ -306,7 +303,7 @@ describe Autobahn do
     context 'using low level operations' do
       before do
         messages.each_with_index do |msg, i|
-          @exchange.publish(msg, :routing_key => routing_keys[i % num_queues], :properties => {:content_type => 'application/octet-stream'})
+          @exchange.publish(msg, :routing_key => ROUTING_KEYS[i % NUM_QUEUES], :properties => {:content_type => 'application/octet-stream'})
         end
         await_delivery
       end
@@ -345,7 +342,7 @@ describe Autobahn do
     context 'with encoded messages' do
       before do
         @consumer.disconnect!
-        @encoded_transport_system = create_transport_system(exchange_name)
+        @encoded_transport_system = create_transport_system(EXCHANGE_NAME)
       end
 
       after do
@@ -353,7 +350,7 @@ describe Autobahn do
       end
 
       it 'auto discovers the encoding based on the content type header' do
-        @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample, :properties => {:content_type => 'application/json'})
+        @exchange.publish('{"hello":"world"}', :routing_key => ROUTING_KEYS.sample, :properties => {:content_type => 'application/json'})
         await_delivery
         @consumer = @encoded_transport_system.consumer
         h, m = @consumer.next
@@ -361,7 +358,7 @@ describe Autobahn do
       end
 
       it 'uses preferred_decoder when possible' do
-        @exchange.publish('message', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
+        @exchange.publish('message', :routing_key => ROUTING_KEYS.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
         await_delivery
         preferred_decoder = double('Encoder')
         preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
@@ -371,7 +368,7 @@ describe Autobahn do
       end
 
       it "doesn't use preferred_decoder when content-type/encoding don't match" do
-        @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/json'})
+        @exchange.publish('{"hello":"world"}', :routing_key => ROUTING_KEYS.sample, :properties =>  {:content_type => 'application/json'})
         await_delivery
         preferred_decoder = double('Encoder')
         preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
@@ -381,7 +378,7 @@ describe Autobahn do
       end
 
       it 'still supports :encoder option' do
-        @exchange.publish('message', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
+        @exchange.publish('message', :routing_key => ROUTING_KEYS.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
         await_delivery
         preferred_decoder = double('Encoder')
         preferred_decoder.stub(:properties => {:content_type => 'application/spec', :content_encoding => 'spec'},:encodes_batches? => false)
@@ -391,7 +388,7 @@ describe Autobahn do
       end
 
       it 'uses fallback_decoder for unknown encodings' do
-        @exchange.publish('message', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
+        @exchange.publish('message', :routing_key => ROUTING_KEYS.sample, :properties =>  {:content_type => 'application/spec', :content_encoding => 'spec'})
         await_delivery
         fallback_decoder = double('Encoder')
         fallback_decoder.stub(:properties => {},:encodes_batches? => false)
@@ -401,7 +398,7 @@ describe Autobahn do
       end
 
       it  "doesn't use fallback_decoder when encoder for content-type/encoding exist" do
-        @exchange.publish('{"hello":"world"}', :routing_key => routing_keys.sample, :properties =>  {:content_type => 'application/json'})
+        @exchange.publish('{"hello":"world"}', :routing_key => ROUTING_KEYS.sample, :properties =>  {:content_type => 'application/json'})
         await_delivery
         fallback_decoder = double('Encoder')
         fallback_decoder.stub(:properties => {},:encodes_batches? => false)
@@ -414,9 +411,9 @@ describe Autobahn do
     context 'with compressed messages' do
       before do
         @consumer.disconnect!
-        @compressed_transport_system = create_transport_system(exchange_name)
+        @compressed_transport_system = create_transport_system(EXCHANGE_NAME)
         compressed_message = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 171, 86, 202, 72, 205, 201, 201, 87, 178, 82, 42, 207, 47, 202, 73, 81, 170, 5, 0, 209, 65, 9, 216, 17, 0, 0, 0].pack('C*')
-        @exchange.publish(compressed_message, :routing_key => routing_keys.sample, :properties => {:content_type => 'application/json', :content_encoding => 'gzip'})
+        @exchange.publish(compressed_message, :routing_key => ROUTING_KEYS.sample, :properties => {:content_type => 'application/json', :content_encoding => 'gzip'})
         await_delivery
       end
 
@@ -438,9 +435,9 @@ describe Autobahn do
         options = {
           :batch => {:size => @batch_size, :timeout => 2}
         }
-        @batching_transport_system = create_transport_system(exchange_name, options)
+        @batching_transport_system = create_transport_system(EXCHANGE_NAME, options)
         messages.each_slice(@batch_size) do |batch|
-          @exchange.publish(encoder.encode(batch), :routing_key => routing_keys.sample, :properties => encoder.properties)
+          @exchange.publish(encoder.encode(batch), :routing_key => ROUTING_KEYS.sample, :properties => encoder.properties)
         end
         @latch = Autobahn::Concurrency::CountDownLatch.new(messages.size)
         @consumer.disconnect!
@@ -498,7 +495,7 @@ describe Autobahn do
     end
 
     def transport_messages!(options)
-      transport_system = create_transport_system(exchange_name, options)
+      transport_system = create_transport_system(EXCHANGE_NAME, options)
       publisher = transport_system.publisher
       consumer = transport_system.consumer
       messages = 200.times.map { |i| {'foo' => "bar#{i}"} }
@@ -540,7 +537,7 @@ describe Autobahn do
   describe 'Creating a transport system' do
     context 'when inquiring about existence' do
       it 'can tell that a transport system exists' do
-        ts = create_transport_system(exchange_name)
+        ts = create_transport_system(EXCHANGE_NAME)
         ts.exists?.should be_true
       end
 

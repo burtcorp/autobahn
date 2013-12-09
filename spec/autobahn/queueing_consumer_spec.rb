@@ -3,7 +3,7 @@ require_relative '../spec_helper'
 
 module Autobahn
   describe QueueingConsumer do
-    stubs :channel, :encoder_registry, :encoder, :demultiplexer, :headers, :encoded_message, :decoded_message
+    doubles :channel, :encoder_registry, :encoder, :demultiplexer, :headers, :encoded_message, :decoded_message
 
     let :queueing_consumer do
       described_class.new(channel, encoder_registry, demultiplexer)
@@ -36,7 +36,7 @@ module Autobahn
       end
 
       context 'with batched messages' do
-        stubs :another_decoded_message
+        doubles :another_decoded_message
 
         before do
           encoder.stub(:encodes_batches?).and_return(true)

@@ -4,7 +4,7 @@ require_relative '../spec_helper'
 module Autobahn
   describe Consumer do
     describe '#initialize' do
-      stubs :encoder_registry
+      doubles :encoder_registry
 
       let :routing do
         {
@@ -15,8 +15,8 @@ module Autobahn
 
       let :connections do
         {
-          'node_00' => stub,
-          'node_01' => stub
+          'node_00' => double,
+          'node_01' => double
         }
       end
 
