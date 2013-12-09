@@ -107,6 +107,7 @@ module Autobahn
     def setup!
       if @setup.compare_and_set(false, true)
         @setup_lock.lock do
+          @logger.warn(%[No queues to subscribe to, transport system is empty]) if @routing.empty?
           @queues = create_queues
           @subscriptions = create_subscriptions
           @subscriptions.each do |subscription|

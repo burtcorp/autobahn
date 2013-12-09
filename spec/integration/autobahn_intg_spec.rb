@@ -97,6 +97,18 @@ describe Autobahn do
         message_counts.reduce(:+).should == 200
         message_counts.each { |c| c.should_not == 0 }
       end
+
+      it 'publishes to an empty transport system' do
+        ts = create_transport_system('empty')
+        ts.create!(queues_per_node: 0)
+        begin
+          publisher = ts.publisher
+          publisher.publish('hello world')
+        ensure
+          ts.destroy!
+          ts.disconnect!
+        end
+      end
     end
 
     context 'with encoded messages' do
@@ -694,6 +706,20 @@ describe Autobahn do
       it 'create non-durable queues when :durable is false' do
         queues = @stuff_ts.cluster.queues.select { |q| q['name'].start_with?('xyz') }
         queues.map { |q| q['durable'] }.uniq.should == [false]
+      end
+
+      it 'creates no queues and binds no routing keys when :queues_per_node is zero' do
+        ts = create_transport_system('empty')
+        ts.create!(queues_per_node: 0)
+        begin
+          queues = ts.cluster.queues.select { |q| q['name'].start_with?('empty') }
+          queues.should be_empty
+          routing_keys = ts.cluster.bindings.select { |rk| rk['routing_key'].start_with?('empty') }
+          routing_keys.should be_empty
+        ensure
+          ts.disconnect!
+          @connection.create_channel.exchange_delete('empty') rescue nil
+        end
       end
     end
   end

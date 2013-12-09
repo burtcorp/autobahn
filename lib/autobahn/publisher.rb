@@ -31,10 +31,14 @@ module Autobahn
         )
         @last_drain = Time.now
       end
+      if routing_keys.empty?
+        @logger.warn(%[No routing keys bound to "#{@exchange_name}", no messages will be published])
+      end
       self
     end
 
     def publish(message, options={})
+      return if routing_keys.empty?
       rk = nil
       if @batch_options && @strategy.introspective?
         rk = @strategy.select_routing_key(routing_keys, message)
