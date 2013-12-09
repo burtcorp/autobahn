@@ -3,7 +3,6 @@ require_relative '../spec_helper'
 
 module Autobahn
   describe Publisher do
-
     let :simple_routing do
       {'stuff_queue_00' => {:routing_keys => %w[rk_00], :node => 'node_00'}}
     end
@@ -47,8 +46,17 @@ module Autobahn
       end
     end
 
-    describe '#publish' do
+    describe '#start!' do
+      it 'logs a warning when there are no routing keys' do
+        logger = double(:logger)
+        logger.stub(:warn)
+        publisher = described_class.new('stuff', {}, single_connection, encoder, logger: logger)
+        publisher.start!
+        logger.should have_received(:warn).with(/No routing keys/)
+      end
+    end
 
+    describe '#publish' do
       context 'when sending single messages' do
         before do
           @publisher = described_class.new('stuff', simple_routing, single_connection, encoder)
@@ -80,6 +88,14 @@ module Autobahn
           publisher = described_class.new('stuff', simple_routing, single_connection, encoder, {:persistent => true})
           exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense', :persistent => true}))
           publisher.publish('hello world')
+        end
+
+        it 'does nothing when there are no routing keys' do
+          exchange.stub(:publish)
+          publisher = described_class.new('stuff', {}, single_connection, encoder)
+          publisher.start!
+          publisher.publish('hello world')
+          exchange.should_not have_received(:publish)
         end
       end
 
@@ -141,6 +157,16 @@ module Autobahn
           end
           @publisher = described_class.new('stuff', complex_routing, multiple_connections, JsonEncoder.new)
           @publisher.broadcast({'foo' => 1})
+        end
+      end
+
+      context 'with no routing keys' do
+        it 'does nothing' do
+          exchange.stub(:publish)
+          publisher = described_class.new('stuff', {}, single_connection, encoder)
+          publisher.start!
+          publisher.broadcast('hello world')
+          exchange.should_not have_received(:publish)
         end
       end
     end

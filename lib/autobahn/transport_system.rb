@@ -43,8 +43,10 @@ module Autobahn
       rks_per_queue = options[:routing_keys_per_queue] || 1
       queue_prefix = options[:queue_prefix] || "#{@exchange_name}_"
       rk_prefix = options[:routing_key_prefix] || queue_prefix
-      queue_suffix_width = [Math.log10(connections.size * queues_per_node).ceil, 2].max
-      rk_suffix_width = [Math.log10(connections.size * queues_per_node * rks_per_queue).ceil, 2].max
+      total_queue_count = connections.size * queues_per_node
+      total_rk_count = total_queue_count * rks_per_queue
+      queue_suffix_width = total_queue_count > 0 ? [Math.log10(total_queue_count).ceil, 2].max : 0
+      rk_suffix_width = total_rk_count > 0 ? [Math.log10(total_rk_count).ceil, 2].max : 0
       exchange = connections.sample.create_channel.exchange(@exchange_name, :type => :direct, :durable => options.fetch(:durable, true))
       queue_options = {:durable => options.fetch(:durable, true), :arguments => options.fetch(:arguments, {})}
       queue_options[:arguments]['x-ha-policy'] = 'all' if options[:ha] == :all
