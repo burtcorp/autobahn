@@ -124,32 +124,34 @@ module Autobahn
     end
   end
 
-  describe MsgPackLzfEncoder do
-    let :encoder do
-      MsgPackLzfEncoder.new
-    end
-
-    it 'compresses and decompresses data' do
-      encoder.decode(encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
-    end
-
-    it 'encodes batches' do
-      encoder.encodes_batches?.should be_true
-    end
-
-    describe '#encode' do
-      it 'returns a binary string' do
-        encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
-      end
-    end
-
-    describe '#properties' do
-      it 'specifies the content type' do
-        encoder.properties[:content_type].should == 'application/msgpack'
+  {MsgPackLzfEncoder => 'lzf', MsgPackLz4Encoder => 'lz4'}.each do |encoder_class, encoding_name|
+    describe encoder_class do
+      let :encoder do
+        encoder_class.new
       end
 
-      it 'specifies the content encoding' do
-        encoder.properties[:content_encoding].should == 'lzf'
+      it 'compresses and decompresses data' do
+        encoder.decode(encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
+      end
+
+      it 'encodes batches' do
+        encoder.encodes_batches?.should be_true
+      end
+
+      describe '#encode' do
+        it 'returns a binary string' do
+          encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
+        end
+      end
+
+      describe '#properties' do
+        it 'specifies the content type' do
+          encoder.properties[:content_type].should == 'application/msgpack'
+        end
+
+        it 'specifies the content encoding' do
+          encoder.properties[:content_encoding].should == encoding_name
+        end
       end
     end
   end
