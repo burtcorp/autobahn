@@ -20,11 +20,13 @@ GEM
     hot_bunnies (1.5.0-java)
     httpclient (2.2.5)
     json (1.7.7-java)
+    lz4-ruby (0.2.0-java)
     msgpack-jruby (1.2.0-java)
     ning-compress-jars (0.9.5-java)
     rack (1.4.1)
     rack-protection (1.2.0)
       rack
+    rake (10.1.0)
     rspec (2.14.1)
       rspec-core (~> 2.14.0)
       rspec-expectations (~> 2.14.0)
@@ -48,7 +50,9 @@ PLATFORMS
 DEPENDENCIES
   autobahn!
   geminabox
+  lz4-ruby
   msgpack-jruby
   ning-compress-jars
+  rake
   rspec
   webmock

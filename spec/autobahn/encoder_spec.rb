@@ -54,67 +54,9 @@ module Autobahn
     end
   end
 
-  describe GzipEncoder do
-    let :wrapped_encoder do
-      JsonEncoder.new
-    end
-
-    let :gzip_encoder do
-      GzipEncoder.new(wrapped_encoder)
-    end
-
-    it 'compresses and decompresses data' do
-      gzip_encoder.decode(gzip_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
-    end
-
-    describe '#encode' do
-      it 'returns a binary string' do
-        gzip_encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
-      end
-    end
-
-    describe '#properties' do
-      it 'inherits its content type from the encoder it wraps' do
-        gzip_encoder.properties[:content_type].should == wrapped_encoder.properties[:content_type]
-      end
-
-      it 'specifies the content encoding' do
-        gzip_encoder.properties[:content_encoding].should == 'gzip'
-      end
-    end
-  end
-
-  describe LzfEncoder do
-    let :wrapped_encoder do
-      JsonEncoder.new
-    end
-
-    let :lzf_encoder do
-      LzfEncoder.new(wrapped_encoder)
-    end
-
-    it 'compresses and decompresses data' do
-      lzf_encoder.decode(lzf_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
-    end
-
-    describe '#encode' do
-      it 'returns a binary string' do
-        lzf_encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
-      end
-    end
-  end
-
-  describe MsgPackLzfEncoder do
-    let :encoder do
-      MsgPackLzfEncoder.new
-    end
-
+  shared_examples 'encoders' do |encoding_name, content_type=nil|
     it 'compresses and decompresses data' do
       encoder.decode(encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
-    end
-
-    it 'encodes batches' do
-      encoder.encodes_batches?.should be_true
     end
 
     describe '#encode' do
@@ -124,12 +66,45 @@ module Autobahn
     end
 
     describe '#properties' do
-      it 'specifies the content type' do
-        encoder.properties[:content_type].should == 'application/msgpack'
+      it 'inherits its content type from the encoder it wraps' do
+        expected_content_type = (defined? wrapped_encoder) ? wrapped_encoder.properties[:content_type] : content_type
+        encoder.properties[:content_type].should == expected_content_type
       end
 
       it 'specifies the content encoding' do
-        encoder.properties[:content_encoding].should == 'lzf'
+        encoder.properties[:content_encoding].should == encoding_name
+      end
+    end
+  end
+
+  {GzipEncoder => 'gzip', LzfEncoder => 'lzf', Lz4Encoder => 'lz4'}.each do |encoder_class, encoding_name|
+    describe encoder_class do
+      let :wrapped_encoder do
+        JsonEncoder.new
+      end
+
+      let :encoder do
+        encoder_class.new(wrapped_encoder)
+      end
+
+      include_examples 'encoders', encoding_name
+    end
+  end
+
+  {MsgPackLzfEncoder => 'lzf', MsgPackLz4Encoder => 'lz4'}.each do |encoder_class, encoding_name|
+    describe encoder_class do
+      let :encoder do
+        encoder_class.new
+      end
+
+      include_examples 'encoders', encoding_name, 'application/msgpack'
+
+      it 'is compatible with using the two separate encoders' do
+        combined_encoder = encoder_class.new
+        uncombined_encoder = Encoder['application/msgpack', content_encoding: encoding_name]
+        message = {'hello' => 'world'}
+        uncombined_encoder.decode(combined_encoder.encode(message)).should == message
+        combined_encoder.decode(uncombined_encoder.encode(message)).should == message
       end
     end
   end

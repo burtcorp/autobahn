@@ -221,11 +221,35 @@ module Autobahn
   rescue LoadError
   end
 
+  begin
+    require 'lz4-ruby'
+    class Lz4Encoder < Encoder
+      content_encoding 'lz4'
+
+      def encode(obj)
+        LZ4.compress(@wrapped_encoder.encode(obj))
+      end
+
+      def decode(str)
+        @wrapped_encoder.decode(LZ4.uncompress(str))
+      end
+    end
+  rescue LoadError
+  end
+
   if (defined? MsgPackEncoder) && (defined? LzfEncoder)
     begin
       require 'autobahn_msgpack_lzf'
     rescue LoadError
       $stderr.puts "warning: Failed to load autobahn_msgpack_lzf.jar. Run `rake build` to create it."
+    end
+  end
+
+  if (defined? MsgPackEncoder) && (defined? Lz4Encoder)
+    begin
+      require 'autobahn_msgpack_lz4'
+    rescue LoadError
+      $stderr.puts "warning: Failed to load autobahn_msgpack_lz4.jar. Run `rake build` to create it."
     end
   end
 end
