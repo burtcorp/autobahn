@@ -3,6 +3,7 @@ source 'https://rubygems.org/'
 gemspec
 
 group :development do
+  gem 'rake'
   gem 'geminabox'
   gem 'ning-compress-jars'
   gem 'msgpack-jruby'
