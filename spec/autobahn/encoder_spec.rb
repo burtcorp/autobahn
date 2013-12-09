@@ -98,6 +98,14 @@ module Autobahn
       end
 
       include_examples 'encoders', encoding_name, 'application/msgpack'
+
+      it 'is compatible with using the two separate encoders' do
+        combined_encoder = encoder_class.new
+        uncombined_encoder = Encoder['application/msgpack', content_encoding: encoding_name]
+        message = {'hello' => 'world'}
+        uncombined_encoder.decode(combined_encoder.encode(message)).should == message
+        combined_encoder.decode(uncombined_encoder.encode(message)).should == message
+      end
     end
   end
 end
