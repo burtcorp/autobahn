@@ -221,6 +221,22 @@ module Autobahn
   rescue LoadError
   end
 
+  begin
+    require 'lz4-ruby'
+    class Lz4Encoder < Encoder
+      content_encoding 'lz4'
+
+      def encode(obj)
+        LZ4.compress(@wrapped_encoder.encode(obj))
+      end
+
+      def decode(str)
+        @wrapped_encoder.decode(LZ4.uncompress(str))
+      end
+    end
+  rescue LoadError
+  end
+
   if (defined? MsgPackEncoder) && (defined? LzfEncoder)
     begin
       require 'autobahn_msgpack_lzf'

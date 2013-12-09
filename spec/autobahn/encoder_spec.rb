@@ -104,6 +104,26 @@ module Autobahn
     end
   end
 
+  describe Lz4Encoder do
+    let :wrapped_encoder do
+      JsonEncoder.new
+    end
+
+    let :lz4_encoder do
+      Lz4Encoder.new(wrapped_encoder)
+    end
+
+    it 'compresses and decompresses data' do
+      lz4_encoder.decode(lz4_encoder.encode({'hello' => 'world'})).should == {'hello' => 'world'}
+    end
+
+    describe '#encode' do
+      it 'returns a binary string' do
+        lz4_encoder.encode({'hello' => 'world'}).encoding.should == Encoding::BINARY
+      end
+    end
+  end
+
   describe MsgPackLzfEncoder do
     let :encoder do
       MsgPackLzfEncoder.new
