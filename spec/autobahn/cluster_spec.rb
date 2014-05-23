@@ -29,6 +29,28 @@ module Autobahn
 
         cluster.overview.should == {}
       end
+
+      context 'with nil API URI' do
+        let :cluster do
+          Cluster.new(nil)
+        end
+
+        it 'connects to localhost:15672 for testing purposes' do
+          stub_request(:get, "http://guest:guest@localhost:15672/api/overview").to_return(
+            :body => "{}")
+
+          cluster.overview.should == {}
+        end
+
+        it 'reverts to legacy localhost:55672 if connection fails' do
+          stub_request(:get, "http://guest:guest@localhost:15672/api/overview").to_raise(
+            Errno::ECONNREFUSED)
+          stub_request(:get, "http://guest:guest@localhost:55672/api/overview").to_return(
+            :body => "{}")
+
+          cluster.overview.should == {}
+        end
+      end
     end
   end
 end

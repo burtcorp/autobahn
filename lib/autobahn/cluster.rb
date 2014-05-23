@@ -16,7 +16,18 @@ module Autobahn
       def api_call(entity, id=nil)
         url = "#@base_url/#{entity}"
         url << "/#{id}" if id
-        JSON.parse(@http_client.get_content(url))
+        if @base_url
+          content = @http_client.get_content(url)
+        else
+          begin
+            @base_url = 'http://localhost:15672/api'.freeze
+            content = @http_client.get_content(@base_url + url)
+          rescue Errno::ECONNREFUSED
+            @base_url = 'http://localhost:55672/api'.freeze
+            content = @http_client.get_content(@base_url + url)
+          end
+        end
+        JSON.parse(content)
       end
     end
 
