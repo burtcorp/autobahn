@@ -8,7 +8,7 @@ describe Autobahn do
   NUM_QUEUES_PER_NODE = 3
   NUM_QUEUES = NUM_NODES * NUM_QUEUES_PER_NODE
   BASE_PORT = 6672
-  API_BASE_PORT = 56672
+  API_BASE_PORT = 16672
   EXCHANGE_NAME = 'test_exchange'.freeze
   QUEUE_NAMES = Array.new(NUM_QUEUES) { |i| "test_queue_#{i.to_s.rjust(2, '0')}".freeze }.freeze
   ROUTING_KEYS = Array.new(NUM_QUEUES) { |i| "test_rk_#{i.to_s.rjust(2, '0')}".freeze }.freeze
