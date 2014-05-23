@@ -80,8 +80,8 @@ set -e
 case "$1" in
   "start" )
     start_cluster ;;
-    "stop" )
-        stop_cluster ;;
+  "stop" )
+      stop_cluster ;;
   * )
     echo "Usage: clusterctl start|stop" 1>&2 ;;
 esac
