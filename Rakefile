@@ -3,6 +3,7 @@
 $: << 'lib'
 
 require 'bundler/setup'
+require 'rspec/core/rake_task'
 require 'autobahn/version'
 require 'ant'
 
@@ -67,3 +68,11 @@ namespace :build do
 end
 
 task :build => 'build:jars'
+
+task :default => :spec
+
+RSpec::Core::RakeTask.new(:spec) do |r|
+  r.rspec_opts = '--tty'
+end
+
+task :spec => :build

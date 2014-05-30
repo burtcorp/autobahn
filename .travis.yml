@@ -1,6 +1,5 @@
 language: ruby
 before_install:
   - ./spec/integration/bin/clusterctl start
-script: bundle exec rspec
 rvm:
   - jruby
