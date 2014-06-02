@@ -1,5 +1,6 @@
 language: ruby
 before_install:
+  - 'sudo hostname $(hostname -s).x'
   - 'PATH=/usr/lib/rabbitmq/bin:$PATH ./spec/integration/bin/clusterctl start'
 rvm:
   - jruby
