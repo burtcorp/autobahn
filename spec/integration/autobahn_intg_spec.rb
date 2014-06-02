@@ -21,7 +21,7 @@ describe Autobahn do
   end
 
   def await_delivery
-    sleep(0.1)
+    sleep(0.5)
   end
 
   def create_transport_system(name, options={})
@@ -216,6 +216,7 @@ describe Autobahn do
         @publisher.publish('hello' => 'world')
         @publisher.publish('foo' => 'bar')
         sleep(@batch_timeout * 2)
+        await_delivery
         message = @queues.map { |q| h, m = q.get; m }.compact.first
         @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}]
       end
