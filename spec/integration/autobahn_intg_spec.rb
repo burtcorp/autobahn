@@ -4,6 +4,7 @@ require_relative '../spec_helper'
 
 
 describe Autobahn do
+  HOSTNAME = `hostname -s`.chomp
   NUM_NODES = 4
   NUM_QUEUES_PER_NODE = 3
   NUM_QUEUES = NUM_NODES * NUM_QUEUES_PER_NODE
@@ -27,13 +28,13 @@ describe Autobahn do
     logger = Logger.new(STDERR)
     logger.level = Logger.const_get((ENV['LOG_LEVEL'] || 'FATAL').upcase)
     logger.progname = name
-    Autobahn.transport_system("http://localhost:#{API_BASE_PORT}/api", name, options.merge(:logger => logger))
+    Autobahn.transport_system("http://#{HOSTNAME}:#{API_BASE_PORT}/api", name, options.merge(:logger => logger))
   end
 
   before :all do
     begin
       NUM_NODES.times do |i|
-        connection = HotBunnies.connect(:port => BASE_PORT + i)
+        connection = HotBunnies.connect(:host => HOSTNAME, :port => BASE_PORT + i)
         channel = connection.create_channel
         exchange = channel.exchange(EXCHANGE_NAME, :type => :direct)
         NUM_QUEUES_PER_NODE.times do |j|
