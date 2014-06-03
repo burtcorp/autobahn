@@ -29,6 +29,11 @@ module Autobahn
         instance2 = Encoder['application/json', :content_encoding => 'gzip']
         instance1.should equal(instance2)
       end
+
+      it 'prefers encoders that support both the content type and encoding' do
+        combined_encoder = Encoder['application/msgpack', content_encoding: 'lzf']
+        combined_encoder.should be_a(MsgPackLzfEncoder)
+      end
     end
   end
 
@@ -91,20 +96,35 @@ module Autobahn
     end
   end
 
-  {MsgPackLzfEncoder => 'lzf', MsgPackLz4Encoder => 'lz4'}.each do |encoder_class, encoding_name|
-    describe encoder_class do
+  {
+    'lzf' => [MsgPackLzfEncoder, LzfEncoder],
+    'lz4' => [MsgPackLz4Encoder, Lz4Encoder],
+  }.each do |encoding_name, (combined_encoder_class, compressing_encoder_class)|
+    describe combined_encoder_class do
       let :encoder do
-        encoder_class.new
+        combined_encoder_class.new
       end
 
       include_examples 'encoders', encoding_name, 'application/msgpack'
 
       it 'is compatible with using the two separate encoders' do
-        combined_encoder = encoder_class.new
-        uncombined_encoder = Encoder['application/msgpack', content_encoding: encoding_name]
+        combined_encoder = encoder
+        uncombined_encoder = compressing_encoder_class.new(Encoder['application/msgpack'])
         message = {'hello' => 'world'}
         uncombined_encoder.decode(combined_encoder.encode(message)).should == message
         combined_encoder.decode(uncombined_encoder.encode(message)).should == message
+      end
+
+      describe '.content_encoding' do
+        it 'returns its content encoding' do
+          combined_encoder_class.content_encoding.should == encoding_name
+        end
+      end
+
+      describe '.content_type' do
+        it 'returns its content type' do
+          combined_encoder_class.content_type.should == 'application/msgpack'
+        end
       end
     end
   end

@@ -31,6 +31,8 @@ import com.headius.jruby.lz4.vendor.net.jpountz.lz4.LZ4Factory;
 @JRubyClass(name="Autobahn::MsgPackLz4Encoder")
 public class MsgPackLz4Encoder extends RubyObject {
   private static final LZ4Factory LZ4_FACTORY = LZ4Factory.fastestInstance();
+  private static final RubyString CONTENT_TYPE = Ruby.getGlobalRuntime().newString("application/msgpack");
+  private static final RubyString CONTENT_ENCODING = Ruby.getGlobalRuntime().newString("lz4");
 
   private final LZ4Compressor compressor;
   private final LZ4Decompressor decompressor;
@@ -48,8 +50,8 @@ public class MsgPackLz4Encoder extends RubyObject {
     this.packer = new RubyObjectPacker(msgPack);
     this.unpacker = new RubyObjectUnpacker(msgPack);
     this.properties = RubyHash.newHash(runtime);
-    this.properties.put(runtime.newSymbol("content_type"), runtime.newString("application/msgpack"));
-    this.properties.put(runtime.newSymbol("content_encoding"), runtime.newString("lz4"));
+    this.properties.put(runtime.newSymbol("content_type"), CONTENT_TYPE);
+    this.properties.put(runtime.newSymbol("content_encoding"), CONTENT_ENCODING);
   }
 
   @JRubyMethod(name = "initialize", optional = 1, visibility = PRIVATE)
@@ -116,7 +118,17 @@ public class MsgPackLz4Encoder extends RubyObject {
     return ctx.getRuntime().getTrue();
   }
 
-  public static final ObjectAllocator ALLOCATOR = new ObjectAllocator() {
+ @JRubyMethod(name = "content_type", module = true)
+ public static IRubyObject getContentType(ThreadContext ctx, IRubyObject recv) {
+   return CONTENT_TYPE;
+ }
+
+ @JRubyMethod(name = "content_encoding", module = true)
+ public static IRubyObject getContentEncoding(ThreadContext ctx, IRubyObject recv) {
+   return CONTENT_ENCODING;
+ }
+
+ public static final ObjectAllocator ALLOCATOR = new ObjectAllocator() {
     public IRubyObject allocate(Ruby runtime, RubyClass type) {
       return new MsgPackLz4Encoder(runtime, type);
     }

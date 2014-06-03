@@ -29,6 +29,9 @@ import com.ning.compress.lzf.LZFDecoder;
 
 @JRubyClass(name="Autobahn::MsgPackLzfEncoder")
 public class MsgPackLzfEncoder extends RubyObject {
+  private static final RubyString CONTENT_TYPE = Ruby.getGlobalRuntime().newString("application/msgpack");
+  private static final RubyString CONTENT_ENCODING = Ruby.getGlobalRuntime().newString("lzf");
+
   private final MessagePack msgPack;
   private final RubyObjectPacker packer;
   private final RubyObjectUnpacker unpacker;
@@ -41,8 +44,8 @@ public class MsgPackLzfEncoder extends RubyObject {
     this.packer = new RubyObjectPacker(msgPack);
     this.unpacker = new RubyObjectUnpacker(msgPack);
     this.properties = RubyHash.newHash(runtime);
-    this.properties.put(runtime.newSymbol("content_type"), runtime.newString("application/msgpack"));
-    this.properties.put(runtime.newSymbol("content_encoding"), runtime.newString("lzf"));
+    this.properties.put(runtime.newSymbol("content_type"), CONTENT_TYPE);
+    this.properties.put(runtime.newSymbol("content_encoding"), CONTENT_ENCODING);
   }
 
   @JRubyMethod(name = "initialize", optional = 1, visibility = PRIVATE)
@@ -73,6 +76,16 @@ public class MsgPackLzfEncoder extends RubyObject {
   @JRubyMethod(name = "encodes_batches?")
   public IRubyObject getEncodesBatches(ThreadContext ctx) {
     return ctx.getRuntime().getTrue();
+  }
+
+  @JRubyMethod(name = "content_type", module = true)
+  public static IRubyObject getContentType(ThreadContext ctx, IRubyObject recv) {
+    return CONTENT_TYPE;
+  }
+
+  @JRubyMethod(name = "content_encoding", module = true)
+  public static IRubyObject getContentEncoding(ThreadContext ctx, IRubyObject recv) {
+    return CONTENT_ENCODING;
   }
 
   public static final ObjectAllocator ALLOCATOR = new ObjectAllocator() {
