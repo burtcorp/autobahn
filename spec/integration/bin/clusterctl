@@ -14,7 +14,7 @@ CLUSTER_BASE_DIR='/tmp/rmq_cluster'
 function start_rmq_node {
   nodename=$1
   port=$2
-  mgmt_port=$(($port + 50000))
+  mgmt_port=$(($port + 10000))
 
   mgmt_port_args_2x="-rabbitmq_mochiweb listeners [{mgmt,[{port,$mgmt_port}]}]"
   mgmt_port_args_3x="-rabbitmq_management listener [{port,$mgmt_port}]"
@@ -80,8 +80,8 @@ set -e
 case "$1" in
   "start" )
     start_cluster ;;
-    "stop" )
-        stop_cluster ;;
+  "stop" )
+      stop_cluster ;;
   * )
     echo "Usage: clusterctl start|stop" 1>&2 ;;
 esac

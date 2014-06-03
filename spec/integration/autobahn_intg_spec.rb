@@ -4,11 +4,12 @@ require_relative '../spec_helper'
 
 
 describe Autobahn do
+  HOSTNAME = `hostname -s`.chomp
   NUM_NODES = 4
   NUM_QUEUES_PER_NODE = 3
   NUM_QUEUES = NUM_NODES * NUM_QUEUES_PER_NODE
   BASE_PORT = 6672
-  API_BASE_PORT = 56672
+  API_BASE_PORT = 16672
   EXCHANGE_NAME = 'test_exchange'.freeze
   QUEUE_NAMES = Array.new(NUM_QUEUES) { |i| "test_queue_#{i.to_s.rjust(2, '0')}".freeze }.freeze
   ROUTING_KEYS = Array.new(NUM_QUEUES) { |i| "test_rk_#{i.to_s.rjust(2, '0')}".freeze }.freeze
@@ -20,20 +21,20 @@ describe Autobahn do
   end
 
   def await_delivery
-    sleep(0.1)
+    sleep(0.5)
   end
 
   def create_transport_system(name, options={})
     logger = Logger.new(STDERR)
     logger.level = Logger.const_get((ENV['LOG_LEVEL'] || 'FATAL').upcase)
     logger.progname = name
-    Autobahn.transport_system("http://localhost:#{API_BASE_PORT}/api", name, options.merge(:logger => logger))
+    Autobahn.transport_system("http://#{HOSTNAME}:#{API_BASE_PORT}/api", name, options.merge(:logger => logger))
   end
 
   before :all do
     begin
       NUM_NODES.times do |i|
-        connection = HotBunnies.connect(:port => BASE_PORT + i)
+        connection = HotBunnies.connect(:host => HOSTNAME, :port => BASE_PORT + i)
         channel = connection.create_channel
         exchange = channel.exchange(EXCHANGE_NAME, :type => :direct)
         NUM_QUEUES_PER_NODE.times do |j|
@@ -215,6 +216,7 @@ describe Autobahn do
         @publisher.publish('hello' => 'world')
         @publisher.publish('foo' => 'bar')
         sleep(@batch_timeout * 2)
+        await_delivery
         message = @queues.map { |q| h, m = q.get; m }.compact.first
         @encoder.decode(message).should == [{'hello' => 'world'}, {'foo' => 'bar'}]
       end
