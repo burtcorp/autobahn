@@ -79,12 +79,12 @@ public class MsgPackLzfEncoder extends RubyObject {
   }
 
   @JRubyMethod(name = "content_type", module = true)
-  public static IRubyObject contentType(ThreadContext ctx, IRubyObject recv) {
+  public static IRubyObject getContentType(ThreadContext ctx, IRubyObject recv) {
     return CONTENT_TYPE;
   }
 
   @JRubyMethod(name = "content_encoding", module = true)
-  public static IRubyObject contentEncoding(ThreadContext ctx, IRubyObject recv) {
+  public static IRubyObject getContentEncoding(ThreadContext ctx, IRubyObject recv) {
     return CONTENT_ENCODING;
   }
 
