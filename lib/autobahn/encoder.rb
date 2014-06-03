@@ -6,17 +6,23 @@ module Autobahn
       def encoder(content_type, options={})
         content_encoding = options[:content_encoding]
         encoder = nil
-        if content_type && content_type_registry[content_type]
+        if content_type && (encoder_types = content_type_registry[content_type])
           encoder = cached_instance(content_type, content_encoding) do
-            e = content_type_registry[content_type].new
             if content_encoding
-              if content_encoding_registry[content_encoding]
-                e = content_encoding_registry[content_encoding].new(e)
+              combined_type = encoder_types.find { |e| e.content_encoding == content_encoding }
+              if combined_type
+                combined_type.new
               else
-                e = nil
+                wrapper_type = content_encoding_registry[content_encoding]
+                if wrapper_type
+                  wrapper_type.new(encoder_types.first.new)
+                else
+                  nil
+                end
               end
+            else
+              encoder_types.first.new
             end
-            e
           end
         end
         encoder
@@ -32,8 +38,8 @@ module Autobahn
 
       def content_type_registry
         @content_type_registry ||= Hash.new do |reg, ct|
-          e = @encoders.find { |e| e.content_type == ct }
-          reg[ct] = e if e
+          e = @encoders.select { |e| e.content_type == ct }
+          reg[ct] = e unless e.empty?
         end
       end
 
