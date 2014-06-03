@@ -2,3 +2,5 @@
 /pkg
 /ext/build
 /lib/autobahn*.jar
+/.rvmrc
+/.ruby-*
