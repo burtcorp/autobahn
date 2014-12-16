@@ -11,7 +11,7 @@ module Autobahn
       @batch_options = options[:batch] || {:size => 1}
       @logger = options[:logger] || NullLogger.new
       @publish_properties = options[:publish] || {}
-      @publish_properties[:persistent] = true if options[:persistent]
+      @publish_properties[:persistent] = @publish_properties.fetch(:persistent, true)
       @buffer_locks = {nil => Concurrency::ReentrantLock.new}
       @batch_buffers = {nil => []}
       routing_keys.each do |rk|
