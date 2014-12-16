@@ -74,19 +74,19 @@ module Autobahn
         end
 
         it 'sets the content-type header to the value given by the encoder' do
-          exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense'}))
+          exchange.should_receive(:publish).with(anything, hash_including(:properties => hash_including({:content_type => 'application/x-nonsense'})))
           @publisher.publish('hello world')
         end
 
-        it 'sets persistent flag for messages' do
-          publisher = described_class.new('stuff', simple_routing, single_connection, encoder, {:publish => {:persistent => true}})
-          exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense', :persistent => true}))
+        it 'sets persistent flag for messages by default' do
+          publisher = described_class.new('stuff', simple_routing, single_connection, encoder)
+          exchange.should_receive(:publish).with(anything, hash_including(:properties => hash_including({:persistent => true})))
           publisher.publish('hello world')
         end
 
-        it 'sets provides simple interface for setting persistent property' do
-          publisher = described_class.new('stuff', simple_routing, single_connection, encoder, {:persistent => true})
-          exchange.should_receive(:publish).with(anything, hash_including(:properties => {:content_type => 'application/x-nonsense', :persistent => true}))
+        it 'does not set the persistent flag when told not to' do
+          publisher = described_class.new('stuff', simple_routing, single_connection, encoder, {:publish => {:persistent => false}})
+          exchange.should_receive(:publish).with(anything, hash_including(:properties => hash_including(:persistent => false)))
           publisher.publish('hello world')
         end
 

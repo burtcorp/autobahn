@@ -110,6 +110,13 @@ describe Autobahn do
           ts.disconnect!
         end
       end
+
+      it 'publishes persistent messages' do
+        @publisher.publish('hello world')
+        await_delivery
+        headers = @queues.map { |q| h, _ = q.get; h }.compact
+        headers.first.properties.delivery_mode.should == 2
+      end
     end
 
     context 'with encoded messages' do
