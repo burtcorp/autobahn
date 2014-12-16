@@ -37,7 +37,7 @@ module Autobahn
       self
     end
 
-    def publish(message, options={})
+    def publish(message, options=nil)
       return if routing_keys.empty?
       rk = nil
       if @batch_options && @strategy.introspective?
