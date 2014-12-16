@@ -193,14 +193,18 @@ module Autobahn
       @demultiplexer = demultiplexer
       @preferred_decoder = options[:preferred_decoder]
       @fallback_decoder = options[:fallback_decoder]
+      @preferred_decoder_content_type = @preferred_decoder && @preferred_decoder.properties[:content_type]
+      @preferred_decoder_content_encoding = @preferred_decoder && @preferred_decoder.properties[:content_encoding]
     end
 
     def deliver(*pair)
-      headers, encoded_message = pair
+      headers = pair[0]
+      content_type = headers.content_type
+      content_encoding = headers.content_encoding
       decoder = begin
-        if @preferred_decoder && @preferred_decoder.properties[:content_type] == headers.content_type && @preferred_decoder.properties[:content_encoding] == headers.content_encoding
+        if @preferred_decoder && @preferred_decoder_content_type == content_type && @preferred_decoder_content_encoding == content_encoding
           @preferred_decoder
-        elsif (decoder=@encoder_registry[headers.content_type, :content_encoding => headers.content_encoding])
+        elsif (decoder = @encoder_registry[content_type, :content_encoding => content_encoding])
           decoder
         elsif @fallback_decoder
           @fallback_decoder
@@ -208,7 +212,7 @@ module Autobahn
           raise UnknownEncodingError, "No available decoder for #{headers.content_type} and #{headers.content_encoding}"
         end
       end
-      decoded_message = decoder.decode(encoded_message)
+      decoded_message = decoder.decode(pair[1])
       if decoder.encodes_batches? && decoded_message.is_a?(Array)
         if decoded_message.size == 0
           # Empty batch - really? O.o
