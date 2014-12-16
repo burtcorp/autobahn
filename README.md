@@ -30,4 +30,5 @@ The following example configures transport system that will transport messages J
 
 ## Requirements
 
-Runs on JRuby 1.6.7 or newer (probably works with any 1.6.x), uses [HotBunnies](https://github.com/ruby-amqp/hot_bunnies).
+* JRuby 1.7.x (might still work with 1.6.x)
+* March Hare 2.7 or newer
