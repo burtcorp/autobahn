@@ -89,7 +89,7 @@ module Autobahn
 
     def exchanges_by_routing_key
       @exchanges_by_routing_key ||= begin
-        exchanges_by_node = Hash[nodes_by_routing_key.values.uniq.map { |node| [node, @connections[node].create_channel.exchange(@exchange_name, :passive => true)] }]
+        exchanges_by_node = Hash[nodes_by_routing_key.values.uniq.map { |node| [node, @connections[node].create_channel.exchange(@exchange_name, :type => :direct, :passive => true)] }]
         Hash[nodes_by_routing_key.map { |rk, node| [rk, exchanges_by_node[node]] }]
       end
     end

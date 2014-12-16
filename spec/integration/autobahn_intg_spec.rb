@@ -34,7 +34,7 @@ describe Autobahn do
   before :all do
     begin
       NUM_NODES.times do |i|
-        connection = HotBunnies.connect(:host => HOSTNAME, :port => BASE_PORT + i)
+        connection = MarchHare.connect(:host => HOSTNAME, :port => BASE_PORT + i)
         channel = connection.create_channel
         exchange = channel.exchange(EXCHANGE_NAME, :type => :direct)
         NUM_QUEUES_PER_NODE.times do |j|
@@ -59,8 +59,8 @@ describe Autobahn do
   end
 
   before :all do
-    @connection = HotBunnies.connect(:port => BASE_PORT)
-    @exchange = @connection.create_channel.exchange(EXCHANGE_NAME, :passive => true)
+    @connection = MarchHare.connect(:port => BASE_PORT)
+    @exchange = @connection.create_channel.exchange(EXCHANGE_NAME, :passive => true, :type => :direct)
     @queues = NUM_QUEUES.times.map do |i|
       @connection.create_channel.queue(QUEUE_NAMES[i], :passive => true)
     end

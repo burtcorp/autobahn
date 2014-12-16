@@ -53,12 +53,12 @@ module Autobahn
 
     def unsubscribe!(timeout=30)
       @setup_lock.lock do
-        if @subscriptions
-          @subscriptions.each do |subscription|
-            logger.debug { "Unsubscribing from #{subscription.queue_name}" }
-            subscription.cancel
+        if @consumers
+          @consumers.each do |consumer|
+            logger.debug { "Unsubscribing from #{consumer.queue_name}" }
+            consumer.cancel
           end
-          @subscriptions = nil
+          @consumers = nil
           logger.info do
             if @demultiplexer.respond_to?(:queued_message_count)
               "Consumer unsubscribed, #{@demultiplexer.queued_message_count} messages buffered"
@@ -109,11 +109,11 @@ module Autobahn
         @setup_lock.lock do
           @logger.warn(%[No queues to subscribe to, transport system is empty]) if @routing.empty?
           @queues = create_queues
-          @subscriptions = create_subscriptions
-          @subscriptions.each do |subscription|
-            logger.info { sprintf('Subscribing to %s with prefetch %d', subscription.queue_name, @prefetch || 0) }
-            queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer, :preferred_decoder => @preferred_decoder, :fallback_decoder => @fallback_decoder)
-            subscription.start(queue_consumer)
+          @consumers = @queues.map do |queue|
+            logger.info { sprintf('Subscribing to %s with prefetch %d', queue.name, @prefetch || 0) }
+            subscription_options = {:ack => true}
+            queue_consumer = QueueingConsumer.new(queue.channel, queue, subscription_options, @encoder_registry, @demultiplexer, :preferred_decoder => @preferred_decoder, :fallback_decoder => @fallback_decoder)
+            queue.subscribe_with(queue_consumer, subscription_options)
           end
           @deliver.set(true)
         end
@@ -128,11 +128,9 @@ module Autobahn
     end
 
     def channels_by_consumer_tag
-      @channels_by_consumer_tag ||= Hash[@subscriptions.map { |s| [s.consumer_tag, s.channel] }]
-    end
-
-    def create_subscriptions
-      @queues.map { |queue| queue.subscribe(:ack => true) }
+      @channels_by_consumer_tag ||= @consumers.each_with_object({}) do |consumer, acc|
+        acc[consumer.consumer_tag] = consumer.channel
+      end
     end
 
     def create_queues
@@ -186,13 +184,17 @@ module Autobahn
     end
   end
 
-  class QueueingConsumer < HotBunnies::Queue::BaseConsumer
-    def initialize(channel, encoder_registry, demultiplexer, options = {})
-      super(channel)
+  class QueueingConsumer < MarchHare::CallbackConsumer
+    def initialize(channel, queue, subscription_options, encoder_registry, demultiplexer, options = {})
+      super(channel, queue, subscription_options, proc {})
       @encoder_registry = encoder_registry
       @demultiplexer = demultiplexer
       @preferred_decoder = options[:preferred_decoder]
       @fallback_decoder = options[:fallback_decoder]
+    end
+
+    def queue_name
+      @queue.name
     end
 
     def deliver(*pair)

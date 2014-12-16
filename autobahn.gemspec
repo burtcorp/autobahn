@@ -16,8 +16,8 @@ Gem::Specification.new do |s|
   s.description = %q{Autobahn is a transport system abstraction for HotBunnies/RabbitMQ that tries to maximize message throughput rates}
 
   s.rubyforge_project = 'autobahn'
-  
-  s.add_dependency 'hot_bunnies', '~> 1.5'
+
+  s.add_dependency 'march_hare', '~> 2.7'
   s.add_dependency 'httpclient', '~> 2.2'
   s.add_dependency 'json'
 

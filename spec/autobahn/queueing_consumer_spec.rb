@@ -3,12 +3,12 @@ require_relative '../spec_helper'
 
 module Autobahn
   describe QueueingConsumer do
-    doubles :channel, :encoder_registry, :encoder, :demultiplexer, :headers, :encoded_message, :decoded_message
+    doubles :channel, :queue, :encoder_registry, :encoder, :demultiplexer, :headers, :encoded_message, :decoded_message
 
     let :queueing_consumer do
-      described_class.new(channel, encoder_registry, demultiplexer)
+      described_class.new(channel, queue, subscription_options = {}, encoder_registry, demultiplexer)
     end
-    
+
     describe '#deliver' do
       before do
         headers.stub(:content_type).and_return('application/stuff')

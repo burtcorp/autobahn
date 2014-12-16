@@ -7,7 +7,7 @@ module Autobahn
 
     def initialize(api_uri, exchange_name, options={})
       @cluster = (options[:cluster_factory] || Cluster).new(api_uri, options)
-      @connection_factory = options[:connection_factory] || HotBunnies
+      @connection_factory = options[:connection_factory] || MarchHare
       @exchange_name = exchange_name
       @host_resolver = options[:host_resolver] || DefaultHostResolver.new
       @encoder = options[:encoder] || StringEncoder.new

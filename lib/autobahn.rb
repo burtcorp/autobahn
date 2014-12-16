@@ -15,7 +15,7 @@ module Autobahn
   end
 end
 
-require 'hot_bunnies'
+require 'march_hare'
 require 'autobahn/version'
 require 'autobahn/concurrency'
 require 'autobahn/cluster'
