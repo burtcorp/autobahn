@@ -215,7 +215,6 @@ module Autobahn
       decoded_message = decoder.decode(pair[1])
       if decoder.encodes_batches? && decoded_message.is_a?(Array)
         if decoded_message.size == 0
-          # Empty batch - really? O.o
           headers.ack
         elsif decoded_message.size == 1
           pair[1] = decoded_message.first

@@ -42,8 +42,11 @@ module Autobahn
           encoder.stub(:encodes_batches?).and_return(true)
         end
 
-        it 'decodes using an encoder retrieved from the encoder registry, and passes each message in the batch to the demultiplexer' do
+        before do
           encoder_registry.stub(:[]).with('application/stuff', anything).and_return(encoder)
+        end
+
+        it 'decodes using an encoder retrieved from the encoder registry, and passes each message in the batch to the demultiplexer' do
           encoder.stub(:decode).with(encoded_message).and_return([decoded_message, another_decoded_message])
           demultiplexer.should_receive(:put).with([an_instance_of(BatchHeaders), decoded_message])
           demultiplexer.should_receive(:put).with([an_instance_of(BatchHeaders), another_decoded_message])
@@ -51,9 +54,15 @@ module Autobahn
         end
 
         it 'decodes using an encoder retrieved from the encoder registry, and passes each message in the batch to the demultiplexer, when the batch contains only one message' do
-          encoder_registry.stub(:[]).with('application/stuff', anything).and_return(encoder)
           encoder.stub(:decode).with(encoded_message).and_return([decoded_message])
           demultiplexer.should_receive(:put).with([headers, decoded_message])
+          queueing_consumer.deliver(headers, encoded_message)
+        end
+
+        it 'acks empty batches immediately' do
+          encoder.stub(:decode).and_return([])
+          demultiplexer.should_not_receive(:put)
+          headers.should_receive(:ack)
           queueing_consumer.deliver(headers, encoded_message)
         end
       end
