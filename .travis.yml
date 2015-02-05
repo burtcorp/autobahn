@@ -4,3 +4,7 @@ before_install:
   - 'PATH=/usr/lib/rabbitmq/bin:$PATH ./spec/integration/bin/clusterctl start'
 rvm:
   - jruby
+  - jruby-head
+matrix:
+  allow_failures:
+    - rvm: jruby-head
