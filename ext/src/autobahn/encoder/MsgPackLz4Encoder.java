@@ -26,41 +26,30 @@ import org.msgpack.jruby.Decoder;
 
 
 @JRubyClass(name="Autobahn::MsgPackLz4Encoder")
-public class MsgPackLz4Encoder extends RubyObject {
+public class MsgPackLz4Encoder extends MsgPackEncoderBase {
   private static final LZ4Factory LZ4_FACTORY = LZ4Factory.fastestInstance();
-  private static final RubyString CONTENT_TYPE = Ruby.getGlobalRuntime().newString("application/msgpack");
   private static final RubyString CONTENT_ENCODING = Ruby.getGlobalRuntime().newString("lz4");
 
   private final LZ4Compressor compressor;
   private final LZ4Decompressor decompressor;
-  private final Encoder encoder;
-  private final RubyHash properties;
-  private RubyHash unpackerOptions;
 
   public MsgPackLz4Encoder(Ruby runtime, RubyClass type) {
-    super(runtime, type);
+    super(runtime, type, CONTENT_ENCODING);
     this.compressor = LZ4_FACTORY.fastCompressor();
     this.decompressor = LZ4_FACTORY.decompressor();
-    this.encoder = new Encoder(runtime);
-    this.properties = RubyHash.newHash(runtime);
-    this.properties.put(runtime.newSymbol("content_type"), CONTENT_TYPE);
-    this.properties.put(runtime.newSymbol("content_encoding"), CONTENT_ENCODING);
   }
 
-  @JRubyMethod(name = "initialize", optional = 1, visibility = PRIVATE)
-  public IRubyObject initialize(ThreadContext ctx, IRubyObject[] args) {
-    unpackerOptions = (args.length == 1 && args[0] instanceof RubyHash) ? (RubyHash) args[0] : null;
-    return this;
+  @JRubyMethod(name = "content_encoding", module = true)
+  public static IRubyObject getContentEncoding(ThreadContext ctx, IRubyObject recv) {
+    return CONTENT_ENCODING;
   }
 
-  @JRubyMethod(required = 1)
-  public IRubyObject encode(ThreadContext ctx, IRubyObject obj) throws IOException {
-    ByteList packed = encoder.encode(obj).asString().getByteList();
+  protected RubyString compress(Ruby runtime, ByteList packed) throws IOException {
     int maxBufferSize = 4 + compressor.maxCompressedLength(packed.length());
     byte[] compressed = new byte[maxBufferSize];
     int headerSize = encodeHeader(packed.length(), compressed);
     int compressedSize = compressor.compress(packed.unsafeBytes(), packed.begin(), packed.length(), compressed, headerSize, maxBufferSize - headerSize);
-    return RubyString.newStringNoCopy(ctx.getRuntime(), compressed, 0, headerSize + compressedSize);
+    return RubyString.newStringNoCopy(runtime, compressed, 0, headerSize + compressedSize);
   }
 
   private int encodeHeader(int size, byte[] buffer) {
@@ -78,21 +67,14 @@ public class MsgPackLz4Encoder extends RubyObject {
     }
   }
 
-  @JRubyMethod(required = 1)
-  public IRubyObject decode(ThreadContext ctx, IRubyObject str) throws IOException {
-    ByteList compressed = str.asString().getByteList();
+  protected byte[] decompress(ByteList compressed) throws IOException {
     byte[] compressedBytes = compressed.unsafeBytes();
     int compressedOffset = compressed.begin();
     int compressedLength = compressed.length();
     int[] header = decodeHeader(compressedBytes, compressedOffset, compressedLength);
     byte[] packed = new byte[header[1]];
     decompressor.decompress(compressedBytes, header[0], packed, compressedOffset, header[1]);
-    Decoder decoder = new Decoder(ctx.getRuntime(), packed);
-    if (decoder.hasNext()) {
-      return decoder.next();
-    } else {
-      return ctx.getRuntime().getNil();
-    }
+    return packed;
   }
 
   private int[] decodeHeader(byte[] buffer, int offset, int length) {
@@ -109,27 +91,7 @@ public class MsgPackLz4Encoder extends RubyObject {
     return new int[] {-1, -1};
   }
 
-  @JRubyMethod(name = "properties")
-  public IRubyObject getProperties(ThreadContext ctx) {
-    return properties;
-  }
-
-  @JRubyMethod(name = "encodes_batches?")
-  public IRubyObject getEncodesBatches(ThreadContext ctx) {
-    return ctx.getRuntime().getTrue();
-  }
-
- @JRubyMethod(name = "content_type", module = true)
- public static IRubyObject getContentType(ThreadContext ctx, IRubyObject recv) {
-   return CONTENT_TYPE;
- }
-
- @JRubyMethod(name = "content_encoding", module = true)
- public static IRubyObject getContentEncoding(ThreadContext ctx, IRubyObject recv) {
-   return CONTENT_ENCODING;
- }
-
- public static final ObjectAllocator ALLOCATOR = new ObjectAllocator() {
+  public static final ObjectAllocator ALLOCATOR = new ObjectAllocator() {
     public IRubyObject allocate(Ruby runtime, RubyClass type) {
       return new MsgPackLz4Encoder(runtime, type);
     }

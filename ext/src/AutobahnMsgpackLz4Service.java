@@ -6,6 +6,7 @@ import org.jruby.RubyModule;
 import org.jruby.runtime.load.BasicLibraryService;
 
 import autobahn.encoder.MsgPackLz4Encoder;
+import autobahn.encoder.MsgPackEncoderBase;
 
 
 public class AutobahnMsgpackLz4Service implements BasicLibraryService {
@@ -13,6 +14,7 @@ public class AutobahnMsgpackLz4Service implements BasicLibraryService {
     RubyModule autobahnModule = runtime.getOrCreateModule("Autobahn");
     RubyClass encoderClass = autobahnModule.getClass("Encoder");
     RubyClass msgPackLz4Class = autobahnModule.defineClassUnder("MsgPackLz4Encoder", encoderClass, MsgPackLz4Encoder.ALLOCATOR);
+    msgPackLz4Class.defineAnnotatedMethods(MsgPackEncoderBase.class);
     msgPackLz4Class.defineAnnotatedMethods(MsgPackLz4Encoder.class);
     return true;
   }
