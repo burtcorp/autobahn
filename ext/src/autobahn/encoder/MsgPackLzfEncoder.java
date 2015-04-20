@@ -5,6 +5,7 @@ import java.io.IOException;
 
 import org.jruby.Ruby;
 import org.jruby.RubyClass;
+import org.jruby.RubyModule;
 import org.jruby.RubyObject;
 import org.jruby.RubyHash;
 import org.jruby.RubyString;
@@ -53,4 +54,12 @@ public class MsgPackLzfEncoder extends MsgPackEncoderBase {
       return new MsgPackLzfEncoder(runtime, type);
     }
   };
+
+  public static void load(Ruby runtime) {
+    RubyModule autobahnModule = runtime.getOrCreateModule("Autobahn");
+    RubyClass encoderClass = autobahnModule.getClass("Encoder");
+    RubyClass msgPackLzfClass = autobahnModule.defineClassUnder("MsgPackLzfEncoder", encoderClass, MsgPackLzfEncoder.ALLOCATOR);
+    msgPackLzfClass.defineAnnotatedMethods(MsgPackEncoderBase.class);
+    msgPackLzfClass.defineAnnotatedMethods(MsgPackLzfEncoder.class);
+  }
 }
