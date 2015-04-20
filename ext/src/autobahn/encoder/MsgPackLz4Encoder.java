@@ -13,19 +13,16 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.anno.JRubyMethod;
 import org.jruby.anno.JRubyClass;
+import org.jruby.util.ByteList;
 
 import static org.jruby.runtime.Visibility.*;
-
-import org.msgpack.jruby.RubyObjectPacker;
-import org.msgpack.jruby.RubyObjectUnpacker;
-
-import org.msgpack.MessagePack;
-import org.msgpack.packer.BufferPacker;
-import org.msgpack.packer.Packer;
 
 import com.headius.jruby.lz4.vendor.net.jpountz.lz4.LZ4Compressor;
 import com.headius.jruby.lz4.vendor.net.jpountz.lz4.LZ4Decompressor;
 import com.headius.jruby.lz4.vendor.net.jpountz.lz4.LZ4Factory;
+
+import org.msgpack.jruby.Encoder;
+import org.msgpack.jruby.Decoder;
 
 
 @JRubyClass(name="Autobahn::MsgPackLz4Encoder")
@@ -36,9 +33,7 @@ public class MsgPackLz4Encoder extends RubyObject {
 
   private final LZ4Compressor compressor;
   private final LZ4Decompressor decompressor;
-  private final MessagePack msgPack;
-  private final RubyObjectPacker packer;
-  private final RubyObjectUnpacker unpacker;
+  private final Encoder encoder;
   private final RubyHash properties;
   private RubyHash unpackerOptions;
 
@@ -46,9 +41,7 @@ public class MsgPackLz4Encoder extends RubyObject {
     super(runtime, type);
     this.compressor = LZ4_FACTORY.fastCompressor();
     this.decompressor = LZ4_FACTORY.decompressor();
-    this.msgPack = new MessagePack();
-    this.packer = new RubyObjectPacker(msgPack);
-    this.unpacker = new RubyObjectUnpacker(msgPack);
+    this.encoder = new Encoder(runtime);
     this.properties = RubyHash.newHash(runtime);
     this.properties.put(runtime.newSymbol("content_type"), CONTENT_TYPE);
     this.properties.put(runtime.newSymbol("content_encoding"), CONTENT_ENCODING);
@@ -62,11 +55,11 @@ public class MsgPackLz4Encoder extends RubyObject {
 
   @JRubyMethod(required = 1)
   public IRubyObject encode(ThreadContext ctx, IRubyObject obj) throws IOException {
-    byte[] packed = packer.packRaw(obj);
-    int maxBufferSize = 4 + compressor.maxCompressedLength(packed.length);
+    ByteList packed = encoder.encode(obj).asString().getByteList();
+    int maxBufferSize = 4 + compressor.maxCompressedLength(packed.length());
     byte[] compressed = new byte[maxBufferSize];
-    int headerSize = encodeHeader(packed.length, compressed);
-    int compressedSize = compressor.compress(packed, 0, packed.length, compressed, headerSize, maxBufferSize - headerSize);
+    int headerSize = encodeHeader(packed.length(), compressed);
+    int compressedSize = compressor.compress(packed.unsafeBytes(), packed.begin(), packed.length(), compressed, headerSize, maxBufferSize - headerSize);
     return RubyString.newStringNoCopy(ctx.getRuntime(), compressed, 0, headerSize + compressedSize);
   }
 
@@ -87,18 +80,26 @@ public class MsgPackLz4Encoder extends RubyObject {
 
   @JRubyMethod(required = 1)
   public IRubyObject decode(ThreadContext ctx, IRubyObject str) throws IOException {
-    byte[] compressed = str.asString().getBytes();
-    int[] header = decodeHeader(compressed);
+    ByteList compressed = str.asString().getByteList();
+    byte[] compressedBytes = compressed.unsafeBytes();
+    int compressedOffset = compressed.begin();
+    int compressedLength = compressed.length();
+    int[] header = decodeHeader(compressedBytes, compressedOffset, compressedLength);
     byte[] packed = new byte[header[1]];
-    decompressor.decompress(compressed, header[0], packed, 0, header[1]);
-    return unpacker.unpack(ctx.getRuntime(), packed, unpackerOptions);
+    decompressor.decompress(compressedBytes, header[0], packed, compressedOffset, header[1]);
+    Decoder decoder = new Decoder(ctx.getRuntime(), packed);
+    if (decoder.hasNext()) {
+      return decoder.next();
+    } else {
+      return ctx.getRuntime().getNil();
+    }
   }
 
-  private int[] decodeHeader(byte[] buffer) {
+  private int[] decodeHeader(byte[] buffer, int offset, int length) {
     int uncompressedSize = 0;
     int headerSize = 0;
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = offset; i < offset + 4; i++) {
       uncompressedSize |= (buffer[i] & 0x7f) << (7 * i);
       ++headerSize;
       if ((buffer[i] & 0x80) == 0) {

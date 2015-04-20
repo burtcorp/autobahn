@@ -13,18 +13,15 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.anno.JRubyMethod;
 import org.jruby.anno.JRubyClass;
+import org.jruby.util.ByteList;
 
 import static org.jruby.runtime.Visibility.*;
 
-import org.msgpack.jruby.RubyObjectPacker;
-import org.msgpack.jruby.RubyObjectUnpacker;
-
-import org.msgpack.MessagePack;
-import org.msgpack.packer.BufferPacker;
-import org.msgpack.packer.Packer;
-
 import com.ning.compress.lzf.LZFEncoder;
 import com.ning.compress.lzf.LZFDecoder;
+
+import org.msgpack.jruby.Encoder;
+import org.msgpack.jruby.Decoder;
 
 
 @JRubyClass(name="Autobahn::MsgPackLzfEncoder")
@@ -32,17 +29,13 @@ public class MsgPackLzfEncoder extends RubyObject {
   private static final RubyString CONTENT_TYPE = Ruby.getGlobalRuntime().newString("application/msgpack");
   private static final RubyString CONTENT_ENCODING = Ruby.getGlobalRuntime().newString("lzf");
 
-  private final MessagePack msgPack;
-  private final RubyObjectPacker packer;
-  private final RubyObjectUnpacker unpacker;
+  private final Encoder encoder;
   private final RubyHash properties;
   private RubyHash unpackerOptions;
 
   public MsgPackLzfEncoder(Ruby runtime, RubyClass type) {
     super(runtime, type);
-    this.msgPack = new MessagePack();
-    this.packer = new RubyObjectPacker(msgPack);
-    this.unpacker = new RubyObjectUnpacker(msgPack);
+    this.encoder = new Encoder(runtime);
     this.properties = RubyHash.newHash(runtime);
     this.properties.put(runtime.newSymbol("content_type"), CONTENT_TYPE);
     this.properties.put(runtime.newSymbol("content_encoding"), CONTENT_ENCODING);
@@ -56,16 +49,21 @@ public class MsgPackLzfEncoder extends RubyObject {
 
   @JRubyMethod(required = 1)
   public IRubyObject encode(ThreadContext ctx, IRubyObject obj) throws IOException {
-    byte[] packed = packer.packRaw(obj);
-    byte[] compressed = LZFEncoder.encode(packed);
-    return RubyString.newString(ctx.getRuntime(), compressed);
+    ByteList packed = encoder.encode(obj).asString().getByteList();
+    byte[] compressed = LZFEncoder.encode(packed.unsafeBytes(), packed.begin(), packed.length());
+    return RubyString.newStringNoCopy(ctx.getRuntime(), compressed, 0, compressed.length);
   }
 
   @JRubyMethod(required = 1)
   public IRubyObject decode(ThreadContext ctx, IRubyObject str) throws IOException {
-    byte[] compressed = str.asString().getBytes();
-    byte[] packed = LZFDecoder.decode(compressed);
-    return unpacker.unpack(ctx.getRuntime(), packed, unpackerOptions);
+    ByteList compressed = str.asString().getByteList();
+    byte[] packed = LZFDecoder.decode(compressed.unsafeBytes(), compressed.begin(), compressed.length());
+    Decoder decoder = new Decoder(ctx.getRuntime(), packed);
+    if (decoder.hasNext()) {
+      return decoder.next();
+    } else {
+      return ctx.getRuntime().getNil();
+    }
   }
 
   @JRubyMethod(name = "properties")
