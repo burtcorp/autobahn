@@ -31,7 +31,7 @@ abstract public class MsgPackEncoderBase extends RubyObject {
   private final RubyString contentEncoding;
   private final Encoder encoder;
   private final RubyHash properties;
-  private RubyHash unpackerOptions;
+  private boolean symbolizeKeys;
 
   public MsgPackEncoderBase(Ruby runtime, RubyClass type, RubyString contentEncoding) {
     super(runtime, type);
@@ -44,7 +44,10 @@ abstract public class MsgPackEncoderBase extends RubyObject {
 
   @JRubyMethod(name = "initialize", optional = 1, visibility = PRIVATE)
   public IRubyObject initialize(ThreadContext ctx, IRubyObject[] args) {
-    unpackerOptions = (args.length == 1 && args[0] instanceof RubyHash) ? (RubyHash) args[0] : null;
+    if (args.length == 1 && args[0] instanceof RubyHash) {
+      RubyHash options = (RubyHash) args[0];
+      this.symbolizeKeys = options.fastARef(ctx.getRuntime().newSymbol("symbolize_keys")).isTrue();
+    }
     return this;
   }
 
@@ -59,6 +62,7 @@ abstract public class MsgPackEncoderBase extends RubyObject {
   public IRubyObject decode(ThreadContext ctx, IRubyObject str) throws IOException {
     ByteList compressed = str.asString().getByteList();
     Decoder decoder = new Decoder(ctx.getRuntime(), decompress(compressed));
+    decoder.symbolizeKeys(symbolizeKeys);
     if (decoder.hasNext()) {
       return decoder.next();
     } else {

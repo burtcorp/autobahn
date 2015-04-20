@@ -126,6 +126,14 @@ module Autobahn
           combined_encoder_class.content_type.should == 'application/msgpack'
         end
       end
+
+      context 'when specifying options' do
+        it 'can decode hash keys as symbols' do
+          encoder = combined_encoder_class.new(symbolize_keys: true)
+          decoded = encoder.decode(encoder.encode('foo' => 'bar', 'baz' => [{'qux' => 'zuul'}]))
+          decoded.should eq(:foo => 'bar', :baz => [{:qux => 'zuul'}])
+        end
+      end
     end
   end
 end
