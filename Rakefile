@@ -51,13 +51,9 @@ namespace :build do
   end
 
   task :jars => :compile do
-    ant.jar :destfile => 'lib/autobahn_msgpack_lzf.jar', :basedir => build_dir do
-      ant.fileset :dir => build_dir, :includes => 'autobahn/encoder/MsgPackLzfEncoder*.class'
-      ant.fileset :dir => build_dir, :includes => 'AutobahnMsgpackLzfService.class'
-    end
-    ant.jar :destfile => 'lib/autobahn_msgpack_lz4.jar', :basedir => build_dir do
-      ant.fileset :dir => build_dir, :includes => 'autobahn/encoder/MsgPackLz4Encoder*.class'
-      ant.fileset :dir => build_dir, :includes => 'AutobahnMsgpackLz4Service.class'
+    ant.jar :destfile => 'lib/autobahn_msgpack.jar', :basedir => build_dir do
+      ant.fileset :dir => build_dir, :includes => 'autobahn/encoder/*.class'
+      ant.fileset :dir => build_dir, :includes => 'AutobahnMsgpack*Service.class'
     end
   end
 

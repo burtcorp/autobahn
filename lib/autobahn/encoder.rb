@@ -243,19 +243,23 @@ module Autobahn
   rescue LoadError
   end
 
-  if (defined? MsgPackEncoder) && (defined? LzfEncoder)
+  if (defined? MsgPackEncoder) && ((defined? LzfEncoder) || (defined? Lz4Encoder))
     begin
-      require 'autobahn_msgpack_lzf'
-    rescue LoadError
-      $stderr.puts "warning: Failed to load autobahn_msgpack_lzf.jar. Run `rake build` to create it."
-    end
-  end
+      require 'autobahn_msgpack'
 
-  if (defined? MsgPackEncoder) && (defined? Lz4Encoder)
-    begin
-      require 'autobahn_msgpack_lz4'
+      begin
+        Java::ComHeadiusJrubyLz4VendorNetJpountzLz4::LZ4Factory
+        Java::AutobahnEncoder::MsgPackLz4Encoder.load(JRuby.runtime)
+      rescue NameError
+      end
+
+      begin
+        Java::ComNingCompressLzf::LZFEncoder
+        Java::AutobahnEncoder::MsgPackLzfEncoder.load(JRuby.runtime)
+      rescue NameError
+      end
     rescue LoadError
-      $stderr.puts "warning: Failed to load autobahn_msgpack_lz4.jar. Run `rake build` to create it."
+      $stderr.puts "warning: Failed to load autobahn_msgpack.jar. Run `rake build` to create it."
     end
   end
 end

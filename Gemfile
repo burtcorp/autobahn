@@ -6,7 +6,7 @@ group :development do
   gem 'rake'
   gem 'geminabox'
   gem 'ning-compress-jars'
-  gem 'msgpack-jruby'
+  gem 'msgpack'
   gem 'lz4-ruby'
 end
 
