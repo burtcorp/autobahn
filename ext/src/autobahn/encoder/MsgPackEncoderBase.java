@@ -26,18 +26,20 @@ import org.msgpack.jruby.Decoder;
 
 
 abstract public class MsgPackEncoderBase extends RubyObject {
-  private static final RubyString CONTENT_TYPE = Ruby.getGlobalRuntime().newString("application/msgpack");
+  private static final String CONTENT_TYPE = "application/msgpack";
 
+  private final RubyString contentType;
   private final RubyString contentEncoding;
   private final RubyHash properties;
   private boolean symbolizeKeys;
 
   public MsgPackEncoderBase(Ruby runtime, RubyClass type, RubyString contentEncoding) {
     super(runtime, type);
-    this.properties = RubyHash.newHash(runtime);
-    this.properties.put(runtime.newSymbol("content_type"), CONTENT_TYPE);
-    this.properties.put(runtime.newSymbol("content_encoding"), contentEncoding);
+    this.contentType = runtime.newString(CONTENT_TYPE);
     this.contentEncoding = contentEncoding;
+    this.properties = RubyHash.newHash(runtime);
+    this.properties.put(runtime.newSymbol("content_type"), contentType);
+    this.properties.put(runtime.newSymbol("content_encoding"), contentEncoding);
   }
 
   @JRubyMethod(name = "initialize", optional = 1, visibility = PRIVATE)
@@ -83,6 +85,6 @@ abstract public class MsgPackEncoderBase extends RubyObject {
 
  @JRubyMethod(name = "content_type", module = true)
  public static IRubyObject getContentType(ThreadContext ctx, IRubyObject recv) {
-   return CONTENT_TYPE;
+   return ctx.getRuntime().newString(CONTENT_TYPE);
  }
 }

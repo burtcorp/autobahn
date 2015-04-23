@@ -29,20 +29,20 @@ import org.msgpack.jruby.Decoder;
 @JRubyClass(name="Autobahn::MsgPackLz4Encoder")
 public class MsgPackLz4Encoder extends MsgPackEncoderBase {
   private static final LZ4Factory LZ4_FACTORY = LZ4Factory.fastestInstance();
-  private static final RubyString CONTENT_ENCODING = Ruby.getGlobalRuntime().newString("lz4");
+  private static final String CONTENT_ENCODING = "lz4";
 
   private final LZ4Compressor compressor;
   private final LZ4Decompressor decompressor;
 
   public MsgPackLz4Encoder(Ruby runtime, RubyClass type) {
-    super(runtime, type, CONTENT_ENCODING);
+    super(runtime, type, runtime.newString(CONTENT_ENCODING));
     this.compressor = LZ4_FACTORY.fastCompressor();
     this.decompressor = LZ4_FACTORY.decompressor();
   }
 
   @JRubyMethod(name = "content_encoding", module = true)
   public static IRubyObject getContentEncoding(ThreadContext ctx, IRubyObject recv) {
-    return CONTENT_ENCODING;
+    return ctx.getRuntime().newString(CONTENT_ENCODING);
   }
 
   protected RubyString compress(Ruby runtime, ByteList packed) throws IOException {

@@ -27,15 +27,15 @@ import org.msgpack.jruby.Decoder;
 
 @JRubyClass(name="Autobahn::MsgPackLzfEncoder")
 public class MsgPackLzfEncoder extends MsgPackEncoderBase {
-  private static final RubyString CONTENT_ENCODING = Ruby.getGlobalRuntime().newString("lzf");
+  private static final String CONTENT_ENCODING = "lzf";
 
   public MsgPackLzfEncoder(Ruby runtime, RubyClass type) {
-    super(runtime, type, CONTENT_ENCODING);
+    super(runtime, type, runtime.newString(CONTENT_ENCODING));
   }
 
   @JRubyMethod(name = "content_encoding", module = true)
   public static IRubyObject getContentEncoding(ThreadContext ctx, IRubyObject recv) {
-    return CONTENT_ENCODING;
+    return ctx.getRuntime().newString(CONTENT_ENCODING);
   }
 
   @Override
