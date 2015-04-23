@@ -29,13 +29,11 @@ abstract public class MsgPackEncoderBase extends RubyObject {
   private static final RubyString CONTENT_TYPE = Ruby.getGlobalRuntime().newString("application/msgpack");
 
   private final RubyString contentEncoding;
-  private final Encoder encoder;
   private final RubyHash properties;
   private boolean symbolizeKeys;
 
   public MsgPackEncoderBase(Ruby runtime, RubyClass type, RubyString contentEncoding) {
     super(runtime, type);
-    this.encoder = new Encoder(runtime);
     this.properties = RubyHash.newHash(runtime);
     this.properties.put(runtime.newSymbol("content_type"), CONTENT_TYPE);
     this.properties.put(runtime.newSymbol("content_encoding"), contentEncoding);
@@ -53,6 +51,7 @@ abstract public class MsgPackEncoderBase extends RubyObject {
 
   @JRubyMethod(required = 1)
   public IRubyObject encode(ThreadContext ctx, IRubyObject obj) throws IOException {
+    Encoder encoder = new Encoder(ctx.getRuntime());
     return compress(ctx.getRuntime(), encoder.encode(obj).asString().getByteList());
   }
 
