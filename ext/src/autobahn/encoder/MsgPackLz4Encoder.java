@@ -50,7 +50,11 @@ public class MsgPackLz4Encoder extends MsgPackEncoderBase {
     byte[] compressed = new byte[maxBufferSize];
     int headerSize = encodeHeader(packed.length(), compressed);
     int compressedSize = compressor.compress(packed.unsafeBytes(), packed.begin(), packed.length(), compressed, headerSize, maxBufferSize - headerSize);
-    return RubyString.newStringNoCopy(runtime, compressed, 0, headerSize + compressedSize);
+    if (compressedSize < maxBufferSize/2) {
+      return RubyString.newStringNoCopy(runtime, compressed, 0, headerSize + compressedSize);
+    } else {
+      return RubyString.newString(runtime, compressed, 0, headerSize + compressedSize);
+    }
   }
 
   private int encodeHeader(int size, byte[] buffer) {
