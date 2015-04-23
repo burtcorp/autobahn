@@ -22,7 +22,7 @@ namespace :release do
   end
 end
 
-task :release => ['release:tag', 'release:gem']
+task :release => [:spec, 'release:tag', 'release:gem']
 
 namespace :build do
   source_dir = 'ext/src'
