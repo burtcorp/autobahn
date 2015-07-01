@@ -30,4 +30,9 @@ The following example configures transport system that will transport messages J
 
 ## Requirements
 
-Runs on JRuby 1.6.7 or newer (probably works with any 1.6.x), uses [HotBunnies](https://github.com/ruby-amqp/hot_bunnies).
+Autobahn has a number of optional dependencies:
+
+* If you want to use the MessagePack encoders you need to install [msgpack](https://rubygems.org/gems/msgpack)
+* To use the LZF encoders you need [ning-compress-jars](https://rubygems.org/gems/ning-compress-jars)
+* The LZ4 encoders require [lz4-ruby](https://rubygems.org/gems/lz4-ruby)
+
