@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    autobahn (1.6.0.pre2-java)
+    autobahn (1.6.0.pre3-java)
       hot_bunnies (~> 1.5)
       httpclient (~> 2.2)
       json
