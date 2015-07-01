@@ -8,6 +8,7 @@ require 'autobahn/version'
 Gem::Specification.new do |s|
   s.name        = 'autobahn'
   s.version     = Autobahn::VERSION.dup
+  s.license     = 'BSD-3-Clause'
   s.platform    = 'java'
   s.authors     = ['The Burt Platform Team']
   s.email       = ['platform@burtcorp.com']
@@ -16,7 +17,7 @@ Gem::Specification.new do |s|
   s.description = %q{Autobahn is a transport system abstraction for HotBunnies/RabbitMQ that tries to maximize message throughput rates}
 
   s.rubyforge_project = 'autobahn'
-  
+
   s.add_dependency 'hot_bunnies', '~> 1.5'
   s.add_dependency 'httpclient', '~> 2.2'
   s.add_dependency 'json'

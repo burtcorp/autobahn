@@ -36,3 +36,6 @@ Autobahn has a number of optional dependencies:
 * To use the LZF encoders you need [ning-compress-jars](https://rubygems.org/gems/ning-compress-jars)
 * The LZ4 encoders require [lz4-ruby](https://rubygems.org/gems/lz4-ruby)
 
+# Copyright
+
+© 2012-2015 Burt AB, see LICENSE.txt (BSD 3-Clause).
