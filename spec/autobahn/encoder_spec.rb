@@ -133,6 +133,13 @@ module Autobahn
           decoded = encoder.decode(encoder.encode('foo' => 'bar', 'baz' => [{'qux' => 'zuul'}]))
           decoded.should eq(:foo => 'bar', :baz => [{:qux => 'zuul'}])
         end
+
+        it 'can work in compatibility mode' do
+          compressing_encoder = compressing_encoder_class.new(StringEncoder.new)
+          encoder = combined_encoder_class.new(compatibility_mode: true)
+          msgpacked = compressing_encoder.decode(encoder.encode('foo'.force_encoding(Encoding::BINARY)))
+          msgpacked.should eq("\xA3foo")
+        end
       end
     end
   end

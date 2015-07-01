@@ -32,6 +32,7 @@ abstract public class MsgPackEncoderBase extends RubyObject {
   private final RubyString contentEncoding;
   private final RubyHash properties;
   private boolean symbolizeKeys;
+  private boolean compatibilityMode;
 
   public MsgPackEncoderBase(Ruby runtime, RubyClass type, RubyString contentEncoding) {
     super(runtime, type);
@@ -44,16 +45,21 @@ abstract public class MsgPackEncoderBase extends RubyObject {
 
   @JRubyMethod(name = "initialize", optional = 1, visibility = PRIVATE)
   public IRubyObject initialize(ThreadContext ctx, IRubyObject[] args) {
-    if (args.length == 1 && args[0] instanceof RubyHash) {
-      RubyHash options = (RubyHash) args[0];
-      this.symbolizeKeys = options.fastARef(ctx.getRuntime().newSymbol("symbolize_keys")).isTrue();
+    this.symbolizeKeys = false;
+    this.compatibilityMode = false;
+    if (args.length == 1) {
+      RubyHash options = args[0].convertToHash();
+      IRubyObject symbolizeKeysValue = options.fastARef(ctx.getRuntime().newSymbol("symbolize_keys"));
+      IRubyObject compatibilityModeValue = options.fastARef(ctx.getRuntime().newSymbol("compatibility_mode"));
+      this.symbolizeKeys = symbolizeKeysValue != null && symbolizeKeysValue.isTrue();
+      this.compatibilityMode = compatibilityModeValue != null && compatibilityModeValue.isTrue();
     }
     return this;
   }
 
   @JRubyMethod(required = 1)
   public IRubyObject encode(ThreadContext ctx, IRubyObject obj) throws IOException {
-    Encoder encoder = new Encoder(ctx.getRuntime());
+    Encoder encoder = new Encoder(ctx.getRuntime(), compatibilityMode);
     return compress(ctx.getRuntime(), encoder.encode(obj).asString().getByteList());
   }
 
