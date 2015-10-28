@@ -319,6 +319,58 @@ describe Autobahn do
         await_delivery
         @queues.map { |q| q.status.first }.reduce(:+).should == 1
       end
+
+      it 'waits for the current delivery to finish when unsubscribing' do
+        deliver_semaphore = Autobahn::Concurrency::Semaphore.new(0)
+        semaphore = Autobahn::Concurrency::Semaphore.new(0)
+        demultiplexer = double(:demultiplexer)
+        demultiplexer.stub(:put)
+        demultiplexer.stub(:take) do |t|
+          semaphore.release
+          if deliver_semaphore.try_acquire(100, Autobahn::Concurrency::TimeUnit::MILLISECONDS)
+            sleep 0.1
+            [double(:headers), double(:message)]
+          end
+        end
+        @consumer.disconnect!
+        @consumer = @transport_system.consumer(demultiplexer: demultiplexer)
+        sink = double(:sink, consume: nil)
+        @consumer.subscribe(&sink.method(:consume))
+        semaphore.acquire
+        t = Thread.start { semaphore.release; @consumer.unsubscribe! }
+        semaphore.acquire
+        deliver_semaphore.release(10)
+        t.join
+        sink.should have_received(:consume).exactly(10).times
+      end
+
+      it 'interrupts slow-running delivery handler(s) when unsubscribing' do
+        semaphore = Autobahn::Concurrency::Semaphore.new(0)
+        interrupted = Autobahn::Concurrency::AtomicBoolean.new(false)
+        @consumer.subscribe do |headers, message|
+          begin
+            semaphore.acquire
+          rescue java.lang.InterruptedException
+            interrupted.set(true)
+          end
+        end
+        @consumer.unsubscribe!(1) rescue nil
+        interrupted.get.should be_true
+      end
+
+      it 'stops subscription thread(s) when unsubscribing' do
+        threads = []
+        mutex = Mutex.new
+        @consumer.subscribe do |headers, message|
+          mutex.synchronize do
+            threads << Thread.current
+          end
+        end
+        @consumer.unsubscribe!
+        threads.each do |thread|
+          thread.should_not be_alive
+        end
+      end
     end
 
     context 'using low level operations' do

@@ -59,6 +59,7 @@ module Autobahn
             subscription.cancel
           end
           @subscriptions = nil
+          @deliver.set(false)
           logger.info do
             if @demultiplexer.respond_to?(:queued_message_count)
               "Consumer unsubscribed, #{@demultiplexer.queued_message_count} messages buffered"
@@ -66,6 +67,13 @@ module Autobahn
               'Consumer unsubscribed'
             end
           end
+          if @deliver_pool
+            unless Concurrency.shutdown_thread_pool!(@deliver_pool, timeout, 1)
+              raise 'Could not shut down delivery thread pool'
+            end
+            @deliver_pool = nil
+          end
+          @demultiplexer = nil
         end
       end
     end
@@ -73,19 +81,10 @@ module Autobahn
     def disconnect!(timeout=30)
       @setup_lock.lock do
         unsubscribe!(timeout)
-        if @deliver.get
+        if @queues
           logger.debug { 'Disconnecting consumer' }
-          @queues.map(&:channel).each(&:close) if @queues
+          @queues.map(&:channel).each(&:close)
           @queues = nil
-          @deliver.set(false)
-          @deliver_pool_timeout = false
-          if @deliver_pool
-            unless Concurrency.shutdown_thread_pool!(@deliver_pool, 1, timeout)
-              raise 'Could not shut down delivery thread pool'
-            end
-            @deliver_pool = nil
-            @demultiplexer = nil
-          end
           logger.info { 'Consumer disconnected' }
         end
       end
@@ -121,10 +120,17 @@ module Autobahn
     end
 
     def deliver(handler, timeout)
-      begin
+      while @deliver.get
         headers, message = self.next(timeout)
         handler.call(headers, message) if headers
-      end while @deliver.get
+      end
+      while (headers, message = self.next(0))
+        if headers
+          handler.call(headers, message)
+        else
+          break
+        end
+      end
     end
 
     def channels_by_consumer_tag
