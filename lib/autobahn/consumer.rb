@@ -15,7 +15,7 @@ module Autobahn
       @demultiplexer = options[:demultiplexer] || BlockingQueueDemultiplexer.new(:buffer_size => @buffer_size)
       @logger = options[:logger] || NullLogger.new
       @setup = Concurrency::AtomicBoolean.new(false)
-      @deliver = Concurrency::AtomicBoolean.new(false)
+      @drain = Concurrency::AtomicBoolean.new(false)
       @subscribed = Concurrency::AtomicBoolean.new(false)
       @setup_lock = Concurrency::Lock.new
     end
@@ -51,6 +51,23 @@ module Autobahn
       find_subscription(consumer_tag).basic_reject(delivery_tag, !!options[:requeue])
     end
 
+    def drain!(timeout=30)
+      @setup_lock.lock do
+        unsubscribe!(timeout)
+        unless @drain.get_and_set(true)
+          logger.debug { 'Draining consumer' }
+          if @deliver_pool
+            unless Concurrency.shutdown_thread_pool!(@deliver_pool, timeout, 1)
+              raise 'Could not shut down delivery thread pool'
+            end
+            @deliver_pool = nil
+          end
+          @demultiplexer = nil
+          logger.info { 'Consumer drained' }
+        end
+      end
+    end
+
     def unsubscribe!(timeout=30)
       @setup_lock.lock do
         if @subscriptions
@@ -59,7 +76,6 @@ module Autobahn
             subscription.cancel
           end
           @subscriptions = nil
-          @deliver.set(false)
           logger.info do
             if @demultiplexer.respond_to?(:queued_message_count)
               "Consumer unsubscribed, #{@demultiplexer.queued_message_count} messages buffered"
@@ -67,20 +83,13 @@ module Autobahn
               'Consumer unsubscribed'
             end
           end
-          if @deliver_pool
-            unless Concurrency.shutdown_thread_pool!(@deliver_pool, timeout, 1)
-              raise 'Could not shut down delivery thread pool'
-            end
-            @deliver_pool = nil
-          end
-          @demultiplexer = nil
         end
       end
     end
 
     def disconnect!(timeout=30)
       @setup_lock.lock do
-        unsubscribe!(timeout)
+        drain!(timeout)
         if @queues
           logger.debug { 'Disconnecting consumer' }
           @queues.map(&:channel).each(&:close)
@@ -114,13 +123,12 @@ module Autobahn
             queue_consumer = QueueingConsumer.new(subscription.channel, @encoder_registry, @demultiplexer, :preferred_decoder => @preferred_decoder, :fallback_decoder => @fallback_decoder)
             subscription.start(queue_consumer)
           end
-          @deliver.set(true)
         end
       end
     end
 
     def deliver(handler, timeout)
-      while @deliver.get
+      until @drain.get
         headers, message = self.next(timeout)
         handler.call(headers, message) if headers
       end

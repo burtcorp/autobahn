@@ -320,7 +320,7 @@ describe Autobahn do
         @queues.map { |q| q.status.first }.reduce(:+).should == 1
       end
 
-      it 'waits for the current delivery to finish when unsubscribing' do
+      it 'waits for the current delivery to finish when draining' do
         deliver_semaphore = Autobahn::Concurrency::Semaphore.new(0)
         semaphore = Autobahn::Concurrency::Semaphore.new(0)
         demultiplexer = double(:demultiplexer)
@@ -337,14 +337,14 @@ describe Autobahn do
         sink = double(:sink, consume: nil)
         @consumer.subscribe(&sink.method(:consume))
         semaphore.acquire
-        t = Thread.start { semaphore.release; @consumer.unsubscribe! }
+        t = Thread.start { semaphore.release; @consumer.drain! }
         semaphore.acquire
         deliver_semaphore.release(10)
         t.join
         sink.should have_received(:consume).exactly(10).times
       end
 
-      it 'interrupts slow-running delivery handler(s) when unsubscribing' do
+      it 'interrupts slow-running delivery handler(s) when draining' do
         semaphore = Autobahn::Concurrency::Semaphore.new(0)
         interrupted = Autobahn::Concurrency::AtomicBoolean.new(false)
         @consumer.subscribe do |headers, message|
@@ -354,11 +354,11 @@ describe Autobahn do
             interrupted.set(true)
           end
         end
-        @consumer.unsubscribe!(1) rescue nil
+        @consumer.drain!(1) rescue nil
         interrupted.get.should be_true
       end
 
-      it 'stops subscription thread(s) when unsubscribing' do
+      it 'stops subscription thread(s) when draining' do
         threads = []
         mutex = Mutex.new
         @consumer.subscribe do |headers, message|
@@ -366,7 +366,7 @@ describe Autobahn do
             threads << Thread.current
           end
         end
-        @consumer.unsubscribe!
+        @consumer.drain!
         threads.each do |thread|
           thread.should_not be_alive
         end
