@@ -44,7 +44,7 @@ namespace :build do
   end
 
   task :compile => :setup do
-    ant.javac :destdir => build_dir, :includeantruntime => 'no', :target => '1.6', :source => '1.6', :debug => 'on' do
+    ant.javac :destdir => build_dir, :includeantruntime => 'no', :target => '1.7', :source => '1.7', :debug => 'on' do
       classpath :refid => 'compile.class.path'
       src { pathelement :location => '${src.dir}' }
     end
