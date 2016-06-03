@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'autobahn'
+
+
+rabbitmq_api = nil
+transport_system_name = nil
+queues_per_node = 1
+
+parser = OptionParser.new do |parser|
+  parser.on('--rabbitmq-api URI', 'The URI of the RabbitMQ API') { |uri| rabbitmq_api = uri }
+  parser.on('--transport-system NAME', 'Name of the transport system to create') { |name| transport_system_name = name }
+  parser.on('--destroy-first', 'Destroy the current infrastructure and setup the new') { destroy_first = true }
+end
+parser.parse!
+
+valid_args = [rabbitmq_api, transport_system_name].all? { |o| o && !o.empty? }
+unless valid_args
+  $stderr.puts(parser)
+  exit(1)
+end
+
+transport_system = Autobahn.transport_system(rabbitmq_api, transport_system_name)
+transport_system.destroy!
+transport_system.disconnect!
