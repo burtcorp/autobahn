@@ -8,11 +8,13 @@ require 'autobahn'
 rabbitmq_api = nil
 transport_system_name = nil
 queues_per_node = 1
+arguments = {}
 
 parser = OptionParser.new do |parser|
   parser.on('--rabbitmq-api URI', 'The URI of the RabbitMQ API') { |uri| rabbitmq_api = uri }
   parser.on('--transport-system NAME', 'Name of the transport system to create') { |name| transport_system_name = name }
   parser.on('--queues-per-node N', 'The number of queues to create per RabbitMQ node') { |n| queues_per_node = n.to_i }
+  parser.on('--ttl N', 'Queue TTL in milliseconds') { |n| arguments['x-message-ttl'] = n.to_i }
 end
 parser.parse!
 
@@ -24,5 +26,5 @@ unless valid_args
 end
 
 transport_system = Autobahn.transport_system(rabbitmq_api, transport_system_name)
-transport_system.create!(queues_per_node: queues_per_node)
+transport_system.create!(queues_per_node: queues_per_node, arguments: arguments)
 transport_system.disconnect!
