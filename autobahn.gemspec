@@ -24,4 +24,6 @@ Gem::Specification.new do |s|
 
   s.files         = Dir['lib/**/*.rb'] + Dir['lib/**/*.jar']
   s.require_paths = %w(lib)
+  s.bindir        = 'bin'
+  s.executables   = %w(create-transport-system destroy-transport-system)
 end
